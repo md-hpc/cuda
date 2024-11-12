@@ -5,7 +5,10 @@ Repository for all things CUDA.
 CUDA can be run on the [BU Shared Computing Cluster](https://www.bu.edu/tech/support/research/system-usage/connect-scc/scc-ondemand/) or through Google Colab.
 
 ### Running CUDA on the SCC
-<Add instructions here.>
+1. Login to an scc node.
+2. Execute the command: `module load nvidia-hpc` to load the NVIDIA sdk tools.
+3. To compile your cuda code, execute the command: `nvcc <filename> -o <outfile>`
+4. To run the executable, you need a GPU node. [interactive](https://www.bu.edu/tech/support/research/system-usage/running-jobs/interactive-jobs/)/[batch](https://www.bu.edu/tech/support/research/system-usage/running-jobs/submitting-jobs/#job-options)
   
 ### Running CUDA on Google Colab
 1. Create a new colab notebook.
