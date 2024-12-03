@@ -39,3 +39,5 @@ int main(){
 [CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)
 
 [Intro to CUDA (Oklahoma State University ECEN 4773/5793)](https://www.youtube.com/playlist?list=PLC6u37oFvF40BAm7gwVP7uDdzmW83yHPe)
+
+[CUDA in C/C++ on the SCC] (https://www.bu.edu/tech/support/research/software-and-programming/gpu-computing/cuda-c/)
