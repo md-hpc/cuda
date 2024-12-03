@@ -9,11 +9,10 @@
 #define CELL_LENGTH_Y 3
 #define CELL_LENGTH_Z 3
 
-#define TIME_STEPS 1
+#define TIMESTEPS 1
 #define TIMESTEP_DURATION 1                            
 #define EPSILON 1
 #define SIGMA 1
-#define NUM_TIMESTEP 10                            // number of time steps
 
 #define PLUS_1(dimension, length) (!(dimension == length - 1) * (dimension + 1))
 #define MINUS_1(dimension, length) (!(dimension == 0) * (dimension - 1) + (dimension == 0) * (length - 1))
@@ -142,9 +141,10 @@ void initialize_cell_list(struct Cell cellList[CELL_LENGTH_X *CELL_LENGTH_Y * CE
 int main() 
 {
     // defines block and thread dimensions
-    dim3 numBlocksForce(CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * 14);
-    dim3 numBlocksMotion(CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z);
-    dim3 threadsPerBlock(MAX_PARTICLES_PER_CELL);
+    // dim3 is an integer vector type most commonly used to pass the grid and block dimensions in a kernel invocation [X x Y x Z]
+    dim3 numBlocksForce(CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * 14);    // (CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * 14) x 1 x 1
+    dim3 numBlocksMotion(CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z);        // (CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z) x 1 x 1
+    dim3 threadsPerBlock(MAX_PARTICLES_PER_CELL);                               // MAX_PARTICLES_PER_CELL x 1 x 1
 
     // initialize (or import) particle data for simulation
     struct Cell cell_list[CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z];
@@ -173,7 +173,7 @@ int main()
     // TODO: (medium) finish up force_eval
     // TODO: (hard) finish up motion_update
     // do force evaluation and motion update for each time step
-    for (int t = 0; t < NUM_TIMESTEP; ++t) {
+    for (int t = 0; t < TIMESTEPS; ++t) {
         force_eval<<<numBlocksForce, threadsPerBlock>>>(device_cell_list, accelerations);
         motion_update<<<numBlocksMotion, threadsPerBlock>>>(device_cell_list, accelerations);
     }
