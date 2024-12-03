@@ -6,7 +6,7 @@ CUDA can be run on the [BU Shared Computing Cluster](https://www.bu.edu/tech/sup
 
 ### Running CUDA on the SCC
 1. Login to an scc node.
-2. Execute the command: `module load nvidia-hpc` to load the NVIDIA sdk tools.
+2. Execute the command: `module load cuda/11.3` to load the NVIDIA sdk tools.
 3. To compile your cuda code, execute the command: `nvcc <filename> -o <outfile>`
 4. To run the executable, you need a GPU node. [interactive](https://www.bu.edu/tech/support/research/system-usage/running-jobs/interactive-jobs/)/[batch](https://www.bu.edu/tech/support/research/system-usage/running-jobs/submitting-jobs/#job-options)
   
