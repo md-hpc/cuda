@@ -10,10 +10,10 @@
 #define CELL_LENGTH_Z 3
 
 #define TIME_STEPS 1
-#define DT 1                            // amount of time per time step
+#define TIMESTEP_DURATION 1                            
 #define EPSILON 1
 #define SIGMA 1
-#define T 10                            // number of time steps
+#define NUM_TIMESTEP 10                            // number of time steps
 
 #define PLUS_1(dimension, length) (!(dimension == length - 1) * (dimension + 1))
 #define MINUS_1(dimension, length) (!(dimension == 0) * (dimension - 1) + (dimension == 0) * (length - 1))
@@ -32,6 +32,11 @@ struct Cell {
     struct Particle particle_list[MAX_PARTICLES_PER_CELL];
 };
 
+// force computation
+__device__ float compute_force(float x1, float x2) {
+    float force = 10;
+    return force;
+}
 // the meat:
 __global__ void force_eval(struct Cell *cell_list, float *accelerations)
 {
@@ -97,12 +102,12 @@ __global__ void motion_update(struct Cell *cell_list, float *accelerations)
     int particleId = cell.particle_list[threadIdx.x].particleId;
 
     // python: cell_from_position = lambda r: linear_idx(*[floor(x/CUTOFF)%UNIVERSE_SIZE for x in r])
-    cell.particle_list[threadIdx.x].vx += accelerations[particleId] * DT;
-    cell.particle_list[threadIdx.x].vy += accelerations[particleId + 1] * DT;
-    cell.particle_list[threadIdx.x].vz += accelerations[particleId + 2] * DT;
-    cell.particle_list[threadIdx.x].x = (cell.particle_list[threadIdx.x].x + cell.particle_list[threadIdx.x].vx * DT) - (CELL_LENGTH_X * CELL_CUTOFF_RADIUS) * floor(cell.particle_list[threadIdx.x].x / (CELL_LENGTH_X * CELL_CUTOFF_RADIUS));
-    cell.particle_list[threadIdx.x].y = (cell.particle_list[threadIdx.x].y + cell.particle_list[threadIdx.x].vy * DT) - (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS) * floor(cell.particle_list[threadIdx.x].y / (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS));
-    cell.particle_list[threadIdx.x].z = (cell.particle_list[threadIdx.x].z + cell.particle_list[threadIdx.x].vz * DT) - (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS) * floor(cell.particle_list[threadIdx.x].z / (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS));
+    cell.particle_list[threadIdx.x].vx += accelerations[particleId] * TIMESTEP_DURATION;
+    cell.particle_list[threadIdx.x].vy += accelerations[particleId + 1] * TIMESTEP_DURATION;
+    cell.particle_list[threadIdx.x].vz += accelerations[particleId + 2] * TIMESTEP_DURATION;
+    cell.particle_list[threadIdx.x].x = (cell.particle_list[threadIdx.x].x + cell.particle_list[threadIdx.x].vx * TIMESTEP_DURATION) - (CELL_LENGTH_X * CELL_CUTOFF_RADIUS) * floor(cell.particle_list[threadIdx.x].x / (CELL_LENGTH_X * CELL_CUTOFF_RADIUS));
+    cell.particle_list[threadIdx.x].y = (cell.particle_list[threadIdx.x].y + cell.particle_list[threadIdx.x].vy * TIMESTEP_DURATION) - (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS) * floor(cell.particle_list[threadIdx.x].y / (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS));
+    cell.particle_list[threadIdx.x].z = (cell.particle_list[threadIdx.x].z + cell.particle_list[threadIdx.x].vz * TIMESTEP_DURATION) - (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS) * floor(cell.particle_list[threadIdx.x].z / (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS));
 
     cell_list[cell_x + cell_y * CELL_LENGTH_X + cell_z * CELL_LENGTH_X * CELL_LENGTH_Y].particle_list[threadIdx.x] = cell.particle_list[threadIdx.x];
 
@@ -168,7 +173,7 @@ int main()
     // TODO: (medium) finish up force_eval
     // TODO: (hard) finish up motion_update
     // do force evaluation and motion update for each time step
-    for (int t = 0; t < T; ++t) {
+    for (int t = 0; t < NUM_TIMESTEP; ++t) {
         force_eval<<<numBlocksForce, threadsPerBlock>>>(device_cell_list, accelerations);
         motion_update<<<numBlocksMotion, threadsPerBlock>>>(device_cell_list, accelerations);
     }
