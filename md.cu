@@ -2,7 +2,7 @@
 
 // use profiler to identify optimal size ie. CUDA occupancy API, nvvp
 #define NUM_PARTICLES 5
-#define MAX_PARTICLES_PER_CELL 120
+#define MAX_PARTICLES_PER_CELL 128
 
 #define CELL_CUTOFF_RADIUS 1f
 #define CELL_LENGTH_X 3
@@ -17,6 +17,7 @@
 #define PLUS_1(dimension, length) ((dimension != length - 1) * (dimension + 1))
 #define MINUS_1(dimension, length) ((dimension == 0) * length + dimension - 1)
 
+// particle stores coordinates and velocities in x,y,z dimensions
 struct Particle {
     int particleId;
     float x;
@@ -27,6 +28,7 @@ struct Particle {
     float vz;
 };
 
+// cell is an array of particles
 struct Cell {
     struct Particle particle_list[MAX_PARTICLES_PER_CELL];
 };
@@ -91,6 +93,8 @@ __global__ void force_eval(struct Cell *cell_list, float *accelerations)
         atomicAdd(&accelerations[reference_particle_id][1], compute_force(home_cell.particle_list[threadIdx.x].y, neighbor_particle_virtual_y));
         atomicAdd(&accelerations[reference_particle_id][2], compute_force(home_cell.particle_list[threadIdx.x].z, neighbor_particle_virtual_z));
     }
+
+    // particle update here, all particles are still in their original cell
 }
 
 __global__ void motion_update(struct Cell *cell_list, float *accelerations)
@@ -126,7 +130,7 @@ __global__ void motion_update(struct Cell *cell_list, float *accelerations)
     accelerations[particleId + 2] = 0;
 }
 
-void initialize_cell_list(struct Cell cellList[CELL_LENGTH_X *CELL_LENGTH_Y * CELL_LENGTH_Z])
+void initialize_cell_list(struct Cell cellList[CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z])
 {
         // initialize cell list, -1 for empty cell
         memset(cellList, -1, sizeof(cellList));
@@ -145,22 +149,33 @@ void initialize_cell_list(struct Cell cellList[CELL_LENGTH_X *CELL_LENGTH_Y * CE
                         .vz = 0,
                 };
                 // copy particle to 
-                memcpy(&cellList[x][y][z].particle_list[i], &particle, sizeof(struct Particle));
+                for (int j = 0; j < MAX_PARTICLES_PER_CELL; ++j) {
+                    if (cellList[x][y][z].particle_list[j].particleId == -1) {
+                        memcpy(&cellList[x][y][z].particle_list[j], &particle, sizeof(struct Particle));
+                        break;
+                    }
+                }
         }
 }
 
 int main() 
 {
-    // defines block and thread dimensions
-    // dim3 is an integer vector type most commonly used to pass the grid and block dimensions in a kernel invocation [X x Y x Z]
-    dim3 numBlocksForce(CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * 14);    // (CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * 14) x 1 x 1
-    dim3 numBlocksMotion(CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z);        // (CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z) x 1 x 1
-    dim3 threadsPerBlock(MAX_PARTICLES_PER_CELL);                               // MAX_PARTICLES_PER_CELL x 1 x 1
-
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // INITIALIZE CELL LIST WITH PARTICLE DATA
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // initialize (or import) particle data for simulation
     struct Cell cell_list[CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z];
     initialize_cell_list(&cell_list);
+    // device_cell_list stores an array of Cells, where each Cell contains a particle_list
+    struct Cell *device_cell_list;
+    // cudaMalloc initializes GPU global memory to be used as parameter for GPU kernel
+    cudaMalloc(&device_cell_list, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell));
+    cudaMemcpy(device_cell_list, cell_list, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyHostToDevice);
 
+
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // INITIALIZE ACCELERATIONS
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     /*
         accelerations stores accelerations (in x y z dimensions) of each particle to be used in motion update.
         - index of accelerations is related to particleId
@@ -169,27 +184,33 @@ int main()
         - (particleId * 3) + 2 gives index of y
     */
     float *accelerations;
-    // cudaMalloc initializes GPU global memory to be used as parameter for GPU kernel
     cudaMalloc(&accelerations, MAX_PARTICLES_PER_CELL * 3 * sizeof(float));
     cudaMemset(accelerations, 0, MAX_PARTICLES_PER_CELL * 3 * sizeof(float));
 
-    /*
-        device_cell_list stores an array of Cells, where each Cell contains a particle_list
-    */
-    struct Cell *device_cell_list;
-    cudaMalloc(&device_cell_list, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell));
-    cudaMemcpy(device_cell_list, cell_list, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyHostToDevice);
 
-    // the meat of the program, make sure to have o/p of particle data..
-    // TODO: (medium) finish up force_eval
-    // TODO: (hard) finish up motion_update
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // INITIALIZE PARAMETERS FOR FORCE COMPUTATION AND MOTION UPDATE
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // defines block and thread dimensions
+    // dim3 is an integer vector type most commonly used to pass the grid and block dimensions in a kernel invocation [X x Y x Z]
+    dim3 numBlocksForce(CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * 14);    // (CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * 14) x 1 x 1
+    dim3 numBlocksMotion(CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z);        // (CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z) x 1 x 1
+    dim3 threadsPerBlock(MAX_PARTICLES_PER_CELL);                               // MAX_PARTICLES_PER_CELL x 1 x 1
+
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // FORCE COMPUTATION AND MOTION UPDATE
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // do force evaluation and motion update for each time step
+    // steps are separated to ensure threads are synchronized (that force_eval is done)
+    // output of force_eval is stores in device_cell_list and accelerations
     for (int t = 0; t < TIMESTEPS; ++t) {
         force_eval<<<numBlocksForce, threadsPerBlock>>>(device_cell_list, accelerations);
         motion_update<<<numBlocksMotion, threadsPerBlock>>>(device_cell_list, accelerations);
     }
 
-    // copy final result back to host CPU
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //  COPY FINAL RESULT BACK TO HOST CPU
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     cudaMemcpy(cell_list, device_cell_list, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * struct(struct Cell), cudaMemcpyDeviceToHost);
     cudaFree(device_cell_list);
 
