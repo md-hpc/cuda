@@ -13,6 +13,7 @@
 #define DT 1                            // amount of time per time step
 #define EPSILON 1
 #define SIGMA 1
+#define T 10                            // number of time steps
 
 #define PLUS_1(dimension, length) (!(dimension == length - 1) * (dimension + 1))
 #define MINUS_1(dimension, length) (!(dimension == 0) * (dimension - 1) + (dimension == 0) * (length - 1))
@@ -110,7 +111,7 @@ __global__ void motion_update(struct Cell *cell_list, float *accelerations)
     accelerations[particleId + 2] = 0;
 }
 
-void initialize_cell_list(struct Cell cellList[CELL_LENGTH_X][CELL_LENGTH_Y][CELL_LENGTH_Z])
+void initialize_cell_list(struct Cell cellList[CELL_LENGTH_X *CELL_LENGTH_Y * CELL_LENGTH_Z])
 {
         // initialize cell list, -1 for empty cell
         memset(cellList, -1, sizeof(cellList));
