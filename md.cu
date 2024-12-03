@@ -14,8 +14,8 @@
 #define EPSILON 1
 #define SIGMA 1
 
-#define PLUS_1(dimension, length) (!(dimension == length - 1) * (dimension + 1))
-#define MINUS_1(dimension, length) (!(dimension == 0) * (dimension - 1) + (dimension == 0) * (length - 1))
+#define PLUS_1(dimension, length) ((dimension != length - 1) * (dimension + 1))
+#define MINUS_1(dimension, length) ((dimension == 0) * length + dimension - 1)
 
 struct Particle {
     int particleId;
@@ -81,10 +81,15 @@ __global__ void force_eval(struct Cell *cell_list, float *accelerations)
 
     //TODO: (easy) write the rest of the force computation
     for (int i = 0; neighbor_cell.particle_list[i].particleId != -1 && i < MAX_PARTICLES_PER_CELL; ++i) {
+        // boolean expression can be optimized knowing the fact that one dimension of the neighboring half shell is only +1 and not -1
+        float neighbor_particle_virtual_x = neighbor_cell.particle_list[i].x + ((home_x - neighbor_x == CELL_LENGTH_X - 1) + (neighbor_x - home_x == CELL_LENGTH_X - 1) * -1) * (CELL_LENGTH_X * CELL_CUTOFF_RADIUS);
+        float neighbor_particle_virtual_y = neighbor_cell.particle_list[i].y + ((home_y - neighbor_y == CELL_LENGTH_Y - 1) + (neighbor_y - home_y == CELL_LENGTH_Y - 1) * -1) * (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS);
+        float neighbor_particle_virtual_z = neighbor_cell.particle_list[i].z + ((home_z - neighbor_z == CELL_LENGTH_Z - 1) + (neighbor_z - home_z == CELL_LENGTH_Z - 1) * -1) * (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS);
+
         // can probably optimize using linear algebras
-        atomicAdd(&accelerations[reference_particle_id][0], compute_force(home_cell.particle_list[threadIdx.x].x, neighbor_cell.particle_list[i].x));
-        atomicAdd(&accelerations[reference_particle_id][1], compute_force(home_cell.particle_list[threadIdx.x].x, neighbor_cell.particle_list[i].x));
-        atomicAdd(&accelerations[reference_particle_id][2], compute_force(home_cell.particle_list[threadIdx.x].x, neighbor_cell.particle_list[i].x));
+        atomicAdd(&accelerations[reference_particle_id][0], compute_force(home_cell.particle_list[threadIdx.x].x, neighbor_particle_virtual_x));
+        atomicAdd(&accelerations[reference_particle_id][1], compute_force(home_cell.particle_list[threadIdx.x].y, neighbor_particle_virtual_y));
+        atomicAdd(&accelerations[reference_particle_id][2], compute_force(home_cell.particle_list[threadIdx.x].z, neighbor_particle_virtual_z));
     }
 }
 
@@ -109,6 +114,12 @@ __global__ void motion_update(struct Cell *cell_list, float *accelerations)
     cell.particle_list[threadIdx.x].z = (cell.particle_list[threadIdx.x].z + cell.particle_list[threadIdx.x].vz * TIMESTEP_DURATION) - (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS) * floor(cell.particle_list[threadIdx.x].z / (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS));
 
     cell_list[cell_x + cell_y * CELL_LENGTH_X + cell_z * CELL_LENGTH_X * CELL_LENGTH_Y].particle_list[threadIdx.x] = cell.particle_list[threadIdx.x];
+
+    // put above code in force_eval. this code is supposed to 
+    // update cell list with updated particles
+    // one block per cell
+    // one thread per cell not equal to block's cell
+    // that thread loops over each particle and copies it to home cell's particle list
 
     accelerations[particleId] = 0;
     accelerations[particleId + 1] = 0;
