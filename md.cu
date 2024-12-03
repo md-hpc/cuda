@@ -112,7 +112,7 @@ __global__ void motion_update(struct Cell *cell_list, float *accelerations)
 
 void initialize_cell_list(struct Cell cellList[CELL_LENGTH_X][CELL_LENGTH_Y][CELL_LENGTH_Z])
 {
-        // initialize cell list 
+        // initialize cell list, -1 for empty cell
         memset(cellList, -1, sizeof(cellList));
         for (int i = 0; i < NUM_PARTICLES; ++i) {
                 int x = rand() % CELL_LENGTH_X;
@@ -128,7 +128,8 @@ void initialize_cell_list(struct Cell cellList[CELL_LENGTH_X][CELL_LENGTH_Y][CEL
                         .vy = 0,
                         .vz = 0,
                 };
-                memcpy(&cellList[x][y][z].particleList[cellList[x][y][z].next++], &particle, sizeof(struct Particle));
+                // copy particle to 
+                memcpy(&cellList[x][y][z].particle_list[i], &particle, sizeof(struct Particle));
         }
 }
 
@@ -154,6 +155,7 @@ int main()
     // cudaMalloc initializes GPU global memory to be used as parameter for GPU kernel
     cudaMalloc(&accelerations, MAX_PARTICLES_PER_CELL * 3 * sizeof(float));
     cudaMemset(accelerations, 0, MAX_PARTICLES_PER_CELL * 3 * sizeof(float));
+
     /*
         device_cell_list stores an array of Cells, where each Cell contains a particle_list
     */
@@ -170,7 +172,7 @@ int main()
         motion_update<<<numBlocksMotion, threadsPerBlock>>>(device_cell_list, accelerations);
     }
 
-    // copy final result bac
+    // copy final result back to host CPU
     cudaMemcpy(cell_list, device_cell_list, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * struct(struct Cell), cudaMemcpyDeviceToHost);
     cudaFree(device_cell_list);
 
