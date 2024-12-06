@@ -16,7 +16,7 @@
 #define _CELL_LENGTH_Y 3
 #define _CELL_LENGTH_Z 3
 
-#define _TIMESTEPS 1
+#define _TIMESTEPS 500
 #define _TIMESTEP_DURATION 1                            
 #define _EPSILON 1.0
 #define _SIGMA 1.0
@@ -217,8 +217,8 @@ void initialize_cell_list(struct Cell cellList[_CELL_LENGTH_X * _CELL_LENGTH_Y *
         for (int y = 0; y < _CELL_LENGTH_Y; ++y) {
             for (int z = 0; z < _CELL_LENGTH_Z; ++z) {
                 int count = 0;
-                while (cell_list[x + y * _CELL_LENGTH_X + z * _CELL_LENGTH_X * _CELL_LENGTH_Y].particle_list[count].particle_id != -1) {
-                    printf("%d: (%f, %f, %f)\n", cell_list[x + y * _CELL_LENGTH_X + z * _CELL_LENGTH_X * _CELL_LENGTH_Y].particle_list[count].particle_id, cell_list[x + y * _CELL_LENGTH_X + z * _CELL_LENGTH_X * _CELL_LENGTH_Y].particle_list[count].x , cell_list[x + y * _CELL_LENGTH_X + z * _CELL_LENGTH_X * _CELL_LENGTH_Y].particle_list[count].y, cell_list[x + y * _CELL_LENGTH_X + z * _CELL_LENGTH_X * _CELL_LENGTH_Y].particle_list[count].z);
+                while (cellList[x + y * _CELL_LENGTH_X + z * _CELL_LENGTH_X * _CELL_LENGTH_Y].particle_list[count].particle_id != -1) {
+                    printf("%d: (%f, %f, %f)\n", cellList[x + y * _CELL_LENGTH_X + z * _CELL_LENGTH_X * _CELL_LENGTH_Y].particle_list[count].particle_id, cellList[x + y * _CELL_LENGTH_X + z * _CELL_LENGTH_X * _CELL_LENGTH_Y].particle_list[count].x , cellList[x + y * _CELL_LENGTH_X + z * _CELL_LENGTH_X * _CELL_LENGTH_Y].particle_list[count].y, cellList[x + y * _CELL_LENGTH_X + z * _CELL_LENGTH_X * _CELL_LENGTH_Y].particle_list[count].z);
                     count++;
                 }
             }
