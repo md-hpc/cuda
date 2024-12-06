@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <curand.h>
 
 
 // minimum max shared memory size per SM across all architectures is 64K
@@ -9,16 +11,16 @@
 #define _NUM_PARTICLES 5
 #define _MAX_PARTICLES_PER_CELL 128
 
-#define _CELL_CUTOFF_RADIUS 1f
+#define _CELL_CUTOFF_RADIUS 1.0f
 #define _CELL_LENGTH_X 3
 #define _CELL_LENGTH_Y 3
 #define _CELL_LENGTH_Z 3
 
 #define _TIMESTEPS 1
 #define _TIMESTEP_DURATION 1                            
-#define _EPSILON 1f
-#define _SIGMA 1f
-#define _LJ_MIN (-4f * 24f * _EPSILON / _SIGMA * (__powf(7f / 26f, 7f / 6f) - 2f * __powf(7f / 26f, 13f / 6f)))
+#define _EPSILON 1.0
+#define _SIGMA 1.0
+#define _LJ_MIN (-4.0 * 24.0 * _EPSILON / _SIGMA * (powf(7.0 / 26.0, 7.0 / 6.0) - 2.0 * powf(7.0 / 26.0, 13.0 / 6.0)))
 
 #define _PLUS_1(dimension, length) ((dimension != length - 1) * (dimension + 1))
 #define _MINUS_1(dimension, length) ((dimension == 0) * length + dimension - 1)
@@ -46,7 +48,7 @@ __device__ float compute_acceleration(float r1, float r2) {
     if (r == 0)
         return 0;
 
-    float force = 4 * _EPSILON * (6 * powf(_SIGMA, 6f) / powf(r, 7f) - 12 * powf(_SIGMA, 12f) / powf(r, 13f));
+    float force = 4 * _EPSILON * (6 * powf(_SIGMA, 6.0) / powf(r, 7.0) - 12 * powf(_SIGMA, 12.0) / powf(r, 13.0));
     if (force < _LJ_MIN) {
         force = _LJ_MIN;
     }
@@ -142,9 +144,9 @@ __global__ void particle_update(struct Cell *cell_list, float *accelerations)
     cell_list[blockIdx.x].particle_list[threadIdx.x].vx += accelerations[reference_particle_id] * _TIMESTEP_DURATION;
     cell_list[blockIdx.x].particle_list[threadIdx.x].vy += accelerations[reference_particle_id + 1] * _TIMESTEP_DURATION;
     cell_list[blockIdx.x].particle_list[threadIdx.x].vz += accelerations[reference_particle_id + 2] * _TIMESTEP_DURATION;
-    cell_list[blockIdx.x].particle_list[threadIdx.x].x = (cell_list[blockIdx.x].particle_list[threadIdx.x].x + home_cell.particle_list[threadIdx.x].vx * _TIMESTEP_DURATION) - (_CELL_LENGTH_X * _CELL_CUTOFF_RADIUS) * floor(home_cell.particle_list[threadIdx.x].x / (_CELL_LENGTH_X * _CELL_CUTOFF_RADIUS));
-    cell_list[blockIdx.x].particle_list[threadIdx.x].y = (cell_list[blockIdx.x].particle_list[threadIdx.x].y + home_cell.particle_list[threadIdx.x].vy * _TIMESTEP_DURATION) - (_CELL_LENGTH_Y * _CELL_CUTOFF_RADIUS) * floor(home_cell.particle_list[threadIdx.x].y / (_CELL_LENGTH_Y * _CELL_CUTOFF_RADIUS));
-    cell_list[blockIdx.x].particle_list[threadIdx.x].z = (cell_list[blockIdx.x].particle_list[threadIdx.x].z + home_cell.particle_list[threadIdx.x].vz * _TIMESTEP_DURATION) - (_CELL_LENGTH_Z * _CELL_CUTOFF_RADIUS) * floor(home_cell.particle_list[threadIdx.x].z / (_CELL_LENGTH_Z * _CELL_CUTOFF_RADIUS));
+    cell_list[blockIdx.x].particle_list[threadIdx.x].x = (cell_list[blockIdx.x].particle_list[threadIdx.x].x + cell_list[blockIdx.x].particle_list[threadIdx.x].vx * _TIMESTEP_DURATION) - (_CELL_LENGTH_X * _CELL_CUTOFF_RADIUS) * floor(cell_list[blockIdx.x].particle_list[threadIdx.x].x / (_CELL_LENGTH_X * _CELL_CUTOFF_RADIUS));
+    cell_list[blockIdx.x].particle_list[threadIdx.x].y = (cell_list[blockIdx.x].particle_list[threadIdx.x].y + cell_list[blockIdx.x].particle_list[threadIdx.x].vy * _TIMESTEP_DURATION) - (_CELL_LENGTH_Y * _CELL_CUTOFF_RADIUS) * floor(cell_list[blockIdx.x].particle_list[threadIdx.x].y / (_CELL_LENGTH_Y * _CELL_CUTOFF_RADIUS));
+    cell_list[blockIdx.x].particle_list[threadIdx.x].z = (cell_list[blockIdx.x].particle_list[threadIdx.x].z + cell_list[blockIdx.x].particle_list[threadIdx.x].vz * _TIMESTEP_DURATION) - (_CELL_LENGTH_Z * _CELL_CUTOFF_RADIUS) * floor(cell_list[blockIdx.x].particle_list[threadIdx.x].z / (_CELL_LENGTH_Z * _CELL_CUTOFF_RADIUS));
 
     accelerations[reference_particle_id] = 0;
 }
@@ -171,29 +173,28 @@ __global__ void motion_update(struct Cell *cell_list_src, struct Cell *cell_list
 
     for (int current_cell_idx = 0; current_cell_idx < _CELL_LENGTH_X * _CELL_LENGTH_Y * _CELL_LENGTH_Z; ++current_cell_idx) {
         for (int particle_idx = 0; particle_idx < _MAX_PARTICLES_PER_CELL && cell_list_src[current_cell_idx].particle_list[particle_idx].particle_id != -1; ++particle_idx) {
-            struct Particle current_particle = cell_list_src[current_cell_idx].particle_list[particle_idx].x;
+            struct Particle current_particle = cell_list_src[current_cell_idx].particle_list[particle_idx];
             int new_cell_x = current_particle.x / (_CELL_LENGTH_X * _CELL_CUTOFF_RADIUS);
             int new_cell_y = current_particle.y / (_CELL_LENGTH_Y * _CELL_CUTOFF_RADIUS);
             int new_cell_z = current_particle.z / (_CELL_LENGTH_Z * _CELL_CUTOFF_RADIUS);
 
             if (home_x == new_cell_x && home_y == new_cell_y && home_z == new_cell_z) {
-                cell_list_dst.particle_list[free_idx++] = current_particle;
+                cell_list_dst[home_x + home_y * _CELL_LENGTH_X + home_z * _CELL_LENGTH_X * _CELL_LENGTH_Y].particle_list[free_idx++] = current_particle;
             }
         }
     }
-    cell_list_dst.particle_list[free_idx].particle_id = -1;
+    cell_list_dst[home_x + home_y * _CELL_LENGTH_X + home_z * _CELL_LENGTH_X * _CELL_LENGTH_Y].particle_list[free_idx].particle_id = -1;
 }
 
 // initialize cells with random particle data
 void initialize_cell_list(struct Cell cellList[_CELL_LENGTH_X * _CELL_LENGTH_Y * _CELL_LENGTH_Z])
 {
         // initialize cell list, -1 for empty cell
-        memset(cellList, -1, sizeof(cellList));
+        memset(cellList, -1, sizeof(struct Cell)*_CELL_LENGTH_X * _CELL_LENGTH_Y * _CELL_LENGTH_Z);
         for (int i = 0; i < _NUM_PARTICLES; ++i) {
                 int x = rand() % _CELL_LENGTH_X;
                 int y = rand() % _CELL_LENGTH_Y;
                 int z = rand() % _CELL_LENGTH_Z;
-
                 // assign random particle data
                 struct Particle particle = {
                         .particle_id = i,
@@ -255,7 +256,7 @@ int main()
     dim3 numBlocksMotion(_CELL_LENGTH_X * _CELL_LENGTH_Y * _CELL_LENGTH_Z);            // (_CELL_LENGTH_X * _CELL_LENGTH_Y * _CELL_LENGTH_Z) x 1 x 1
     dim3 threadsPerBlockForce(_MAX_PARTICLES_PER_CELL);                              // _MAX_PARTICLES_PER_CELL x 1 x 1
     dim3 threadsPerBlockParticle(_MAX_PARTICLES_PER_CELL);                              // _MAX_PARTICLES_PER_CELL x 1 x 1
-    dim3 threadsPerBlockMotion(_CELL_LENGTH_X, _CELL_LENGTH_Y, _CELL_LENGTH_Z);  
+//    dim3 threadsPerBlockMotion(_CELL_LENGTH_X, _CELL_LENGTH_Y, _CELL_LENGTH_Z);  
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // FORCE COMPUTATION AND MOTION UPDATE
@@ -291,9 +292,9 @@ int main()
     // if flag == 0, then results are in the second half
     // if flag == 1, then results are in the first half
     if (flag) {
-        cudaMemcpy(cell_list, device_cell_list, _CELL_LENGTH_X * _CELL_LENGTH_Y * _CELL_LENGTH_Z * struct(struct Cell), cudaMemcpyDeviceToHost);
+        cudaMemcpy(cell_list, device_cell_list, _CELL_LENGTH_X * _CELL_LENGTH_Y * _CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyDeviceToHost);
     } else {
-        cudaMemcpy(cell_list, device_cell_list + sizeof(cell_list), _CELL_LENGTH_X * _CELL_LENGTH_Y * _CELL_LENGTH_Z * struct(struct Cell), cudaMemcpyDeviceToHost);
+        cudaMemcpy(cell_list, device_cell_list + sizeof(cell_list), _CELL_LENGTH_X * _CELL_LENGTH_Y * _CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyDeviceToHost);
     }
     cudaFree(device_cell_list);
     return 0;
