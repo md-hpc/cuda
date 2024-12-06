@@ -189,30 +189,41 @@ __global__ void motion_update(struct Cell *cell_list_src, struct Cell *cell_list
 // initialize cells with random particle data
 void initialize_cell_list(struct Cell cellList[_CELL_LENGTH_X * _CELL_LENGTH_Y * _CELL_LENGTH_Z])
 {
-        // initialize cell list, -1 for empty cell
-        memset(cellList, -1, sizeof(struct Cell)*_CELL_LENGTH_X * _CELL_LENGTH_Y * _CELL_LENGTH_Z);
-        for (int i = 0; i < _NUM_PARTICLES; ++i) {
-                int x = rand() % _CELL_LENGTH_X;
-                int y = rand() % _CELL_LENGTH_Y;
-                int z = rand() % _CELL_LENGTH_Z;
-                // assign random particle data
-                struct Particle particle = {
-                        .particle_id = i,
-                        .x = x * _CELL_CUTOFF_RADIUS + ((float) rand() / RAND_MAX) * _CELL_CUTOFF_RADIUS,
-                        .y = y * _CELL_CUTOFF_RADIUS + ((float) rand() / RAND_MAX) * _CELL_CUTOFF_RADIUS,
-                        .z = z * _CELL_CUTOFF_RADIUS + ((float) rand() / RAND_MAX) * _CELL_CUTOFF_RADIUS,
-                        .vx = 0,
-                        .vy = 0,
-                        .vz = 0,
-                };
-                // copy particle to to cell list
-                for (int j = 0; j < _MAX_PARTICLES_PER_CELL; ++j) {
-                    if (cellList[x + y * _CELL_LENGTH_X + z * _CELL_LENGTH_X * _CELL_LENGTH_Y].particle_list[j].particle_id == -1) {
-                        memcpy(&cellList[x + y * _CELL_LENGTH_X + z * _CELL_LENGTH_X * _CELL_LENGTH_Y].particle_list[j], &particle, sizeof(struct Particle));
-                        break;
-                    }
-                }
+    // initialize cell list, -1 for empty cell
+    memset(cellList, -1, sizeof(struct Cell)*_CELL_LENGTH_X * _CELL_LENGTH_Y * _CELL_LENGTH_Z);
+    for (int i = 0; i < _NUM_PARTICLES; ++i) {
+        int x = rand() % _CELL_LENGTH_X;
+        int y = rand() % _CELL_LENGTH_Y;
+        int z = rand() % _CELL_LENGTH_Z;
+        // assign random particle data
+        struct Particle particle = {
+            .particle_id = i,
+            .x = x * _CELL_CUTOFF_RADIUS + ((float) rand() / RAND_MAX) * _CELL_CUTOFF_RADIUS,
+            .y = y * _CELL_CUTOFF_RADIUS + ((float) rand() / RAND_MAX) * _CELL_CUTOFF_RADIUS,
+            .z = z * _CELL_CUTOFF_RADIUS + ((float) rand() / RAND_MAX) * _CELL_CUTOFF_RADIUS,
+            .vx = 0,
+            .vy = 0,
+            .vz = 0,
+        };
+        // copy particle to to cell list
+        for (int j = 0; j < _MAX_PARTICLES_PER_CELL; ++j) {
+            if (cellList[x + y * _CELL_LENGTH_X + z * _CELL_LENGTH_X * _CELL_LENGTH_Y].particle_list[j].particle_id == -1) {
+                memcpy(&cellList[x + y * _CELL_LENGTH_X + z * _CELL_LENGTH_X * _CELL_LENGTH_Y].particle_list[j], &particle, sizeof(struct Particle));
+                break;
+            }
         }
+    }
+    for (int x = 0; x < _CELL_LENGTH_X; ++x) {
+        for (int y = 0; y < _CELL_LENGTH_Y; ++y) {
+            for (int z = 0; z < _CELL_LENGTH_Z; ++z) {
+                int count = 0;
+                while (cell_list[x + y * _CELL_LENGTH_X + z * _CELL_LENGTH_X * _CELL_LENGTH_Y].particle_list[count].particle_id != -1) {
+                    printf("%d: (%f, %f, %f)\n", cell_list[x + y * _CELL_LENGTH_X + z * _CELL_LENGTH_X * _CELL_LENGTH_Y].particle_list[count].particle_id, cell_list[x + y * _CELL_LENGTH_X + z * _CELL_LENGTH_X * _CELL_LENGTH_Y].particle_list[count].x , cell_list[x + y * _CELL_LENGTH_X + z * _CELL_LENGTH_X * _CELL_LENGTH_Y].particle_list[count].y, cell_list[x + y * _CELL_LENGTH_X + z * _CELL_LENGTH_X * _CELL_LENGTH_Y].particle_list[count].z);
+                    count++;
+                }
+            }
+        }
+    }
 }
 
 int main() 
@@ -297,5 +308,18 @@ int main()
         cudaMemcpy(cell_list, device_cell_list + sizeof(cell_list), _CELL_LENGTH_X * _CELL_LENGTH_Y * _CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyDeviceToHost);
     }
     cudaFree(device_cell_list);
+
+    for (int x = 0; x < _CELL_LENGTH_X; ++x) {
+        for (int y = 0; y < _CELL_LENGTH_Y; ++y) {
+            for (int z = 0; z < _CELL_LENGTH_Z; ++z) {
+                int count = 0;
+                while (cell_list[x + y * _CELL_LENGTH_X + z * _CELL_LENGTH_X * _CELL_LENGTH_Y].particle_list[count].particle_id != -1) {
+                    printf("%d: (%f, %f, %f)\n", cell_list[x + y * _CELL_LENGTH_X + z * _CELL_LENGTH_X * _CELL_LENGTH_Y].particle_list[count].particle_id, cell_list[x + y * _CELL_LENGTH_X + z * _CELL_LENGTH_X * _CELL_LENGTH_Y].particle_list[count].x , cell_list[x + y * _CELL_LENGTH_X + z * _CELL_LENGTH_X * _CELL_LENGTH_Y].particle_list[count].y, cell_list[x + y * _CELL_LENGTH_X + z * _CELL_LENGTH_X * _CELL_LENGTH_Y].particle_list[count].z);
+                    count++;
+                }
+            }
+        }
+    }
+
     return 0;
 }
