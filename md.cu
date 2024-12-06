@@ -46,7 +46,7 @@ __device__ float compute_acceleration(float r1, float r2) {
     if (r == 0)
         return 0;
 
-    float force = 4 * _EPSILON * (6 * __powf(_SIGMA, 6f) / __powf(r, 7f) - 12 *__powf(_SIGMA, 12f) / __powf(r, 13f));
+    float force = 4 * _EPSILON * (6 * powf(_SIGMA, 6f) / powf(r, 7f) - 12 * powf(_SIGMA, 12f) / powf(r, 13f));
     if (force < _LJ_MIN) {
         force = _LJ_MIN;
     }
