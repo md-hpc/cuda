@@ -1,5 +1,10 @@
 #include <stdio.h>
 
+
+// minimum max shared memory size per SM across all architectures is 64K
+// minimum max resident block per SM across all architectures is 16
+// so worst case, each block will have max 4K shared memory
+
 // use profiler to identify optimal size ie. CUDA occupancy API, nvvp
 #define NUM_PARTICLES 5
 #define MAX_PARTICLES_PER_CELL 128
@@ -11,8 +16,9 @@
 
 #define TIMESTEPS 1
 #define TIMESTEP_DURATION 1                            
-#define EPSILON 1
-#define SIGMA 1
+#define EPSILON 1f
+#define SIGMA 1f
+#define LJ_MIN (-4f * 24f * EPSILON / SIGMA * (__powf(7f / 26f, 7f / 6f) - 2f * __powf(7f / 26f, 13f / 6f)))
 
 #define PLUS_1(dimension, length) ((dimension != length - 1) * (dimension + 1))
 #define MINUS_1(dimension, length) ((dimension == 0) * length + dimension - 1)
@@ -26,6 +32,7 @@ struct Particle {
     float vx;
     float vy;
     float vz;
+    int new_cell_idx;
 };
 
 // cell is an array of particles
@@ -33,11 +40,16 @@ struct Cell {
     struct Particle particle_list[MAX_PARTICLES_PER_CELL];
 };
 
-// force computation
-__device__ float compute_force(float x1, float x2) {
-    float force = 10;
+// LJ force computation
+__device__ float compute_force(float r1, float r2) {
+    float r = fabsf(x1 - x2);
+    float force = 4 * EPSILON * (6*__powf(SIGMA,6f)/__powf(r,7f) - 12*__powf(SIGMA,12f)/__powf(r,13f));
+    if (force < LJ_MIN) {
+        force = LJ_MIN;
+    }
     return force;
 }
+
 // the meat:
 __global__ void force_eval(struct Cell *cell_list, float *accelerations)
 {
@@ -70,29 +82,32 @@ __global__ void force_eval(struct Cell *cell_list, float *accelerations)
                    + (local_idx % 3 == 2) * MINUS_1(home_z, CELL_LENGTH_Z);
 
     // define and assign shared memory
-    __shared__ struct Cell home_cell;
+    __shared__ struct Cell home_cell;   // sizeof struct Cell = MAX_PARTICLES_PER_CELL * 28
     __shared__ struct Cell neighbor_cell;
     home_cell.particle_list[threadIdx.x] = cell_list[home_x][home_y][home_z].particle_list[threadIdx.x];
     neighbor_cell.particle_list[threadIdx.x] = cell_list[neighbor_x][neighbor_y][neighbor_z].particle_list[threadIdx.x];
 
     int reference_particle_id = home_cell.particle_list[threadIdx.x].particle_id;
-    if (reference_particle_id == -1)
-        return;
 
+    // synchronizes threads within a block (all threads must complete tasks)
     __syncthreads();
 
-    //TODO: (easy) write the rest of the force computation
-    for (int i = 0; neighbor_cell.particle_list[i].particle_id != -1 && i < MAX_PARTICLES_PER_CELL; ++i) {
-        // boolean expression can be optimized knowing the fact that one dimension of the neighboring half shell is only +1 and not -1
-        float neighbor_particle_virtual_x = neighbor_cell.particle_list[i].x + ((home_x - neighbor_x == CELL_LENGTH_X - 1) + (neighbor_x - home_x == CELL_LENGTH_X - 1) * -1) * (CELL_LENGTH_X * CELL_CUTOFF_RADIUS);
-        float neighbor_particle_virtual_y = neighbor_cell.particle_list[i].y + ((home_y - neighbor_y == CELL_LENGTH_Y - 1) + (neighbor_y - home_y == CELL_LENGTH_Y - 1) * -1) * (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS);
-        float neighbor_particle_virtual_z = neighbor_cell.particle_list[i].z + ((home_z - neighbor_z == CELL_LENGTH_Z - 1) + (neighbor_z - home_z == CELL_LENGTH_Z - 1) * -1) * (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS);
+    if (reference_particle_id != -1) {
+        //TODO: (easy) write the rest of the force computation
+        for (int i = 0; neighbor_cell.particle_list[i].particle_id != -1 && i < MAX_PARTICLES_PER_CELL; ++i) {
+            // boolean expression can be optimized knowing the fact that one dimension of the neighboring half shell is only +1 and not -1
+            float neighbor_particle_virtual_x = neighbor_cell.particle_list[i].x + ((home_x - neighbor_x == CELL_LENGTH_X - 1) + (neighbor_x - home_x == CELL_LENGTH_X - 1) * -1) * (CELL_LENGTH_X * CELL_CUTOFF_RADIUS);
+            float neighbor_particle_virtual_y = neighbor_cell.particle_list[i].y + ((home_y - neighbor_y == CELL_LENGTH_Y - 1) + (neighbor_y - home_y == CELL_LENGTH_Y - 1) * -1) * (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS);
+            float neighbor_particle_virtual_z = neighbor_cell.particle_list[i].z + ((home_z - neighbor_z == CELL_LENGTH_Z - 1) + (neighbor_z - home_z == CELL_LENGTH_Z - 1) * -1) * (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS);
 
-        // can probably optimize using linear algebras
-        atomicAdd(&accelerations[reference_particle_id][0], compute_force(home_cell.particle_list[threadIdx.x].x, neighbor_particle_virtual_x));
-        atomicAdd(&accelerations[reference_particle_id][1], compute_force(home_cell.particle_list[threadIdx.x].y, neighbor_particle_virtual_y));
-        atomicAdd(&accelerations[reference_particle_id][2], compute_force(home_cell.particle_list[threadIdx.x].z, neighbor_particle_virtual_z));
+            // can probably optimize using linear algebras
+            atomicAdd(&accelerations[reference_particle_id][0], compute_force(home_cell.particle_list[threadIdx.x].x, neighbor_particle_virtual_x));
+            atomicAdd(&accelerations[reference_particle_id][1], compute_force(home_cell.particle_list[threadIdx.x].y, neighbor_particle_virtual_y));
+            atomicAdd(&accelerations[reference_particle_id][2], compute_force(home_cell.particle_list[threadIdx.x].z, neighbor_particle_virtual_z));
+        }
     }
+
+    __syncthreads();
 
     // choose one block to "work" on the home cell
     // threads update their associated particle here
@@ -113,27 +128,46 @@ __global__ void force_eval(struct Cell *cell_list, float *accelerations)
 // update cell lists because particles have moved
 __global__ void motion_update(struct Cell *cell_list, float *accelerations)
 {
+    /*
+        1 block per cell
+        right now 1 thread per block
+        1 thread per particle list
+        keeps counter on next free spot on new particle list
+        once a -1 in the old particle list is reached, there are no particles to the right
+    */
     // get home cell coordinates
+
+    // threadIdx.x is always 0 because we are indexing by blockIdx.x
     int home_x = blockIdx.x % CELL_LENGTH_X;
     int home_y = blockIdx.x / CELL_LENGTH_X % CELL_LENGTH_Y;
     int home_z = blockIdx.x / (CELL_LENGTH_X * CELL_LENGTH_Y) % CELL_LENGTH_Z;
 
-    __shared__ struct Cell cell;
-    cell.particle_list[threadIdx.x] = cell_list[cell_x + cell_y * CELL_LENGTH_X + cell_z * CELL_LENGTH_X * CELL_LENGTH_Y].particle_list[threadIdx.x];
+    // declare double-buffer buffer
+    struct Cell cell;
+    // location of where thread is in buffer
+    int free_idx = 0;
 
-    int particle_id = cell.particle_list[threadIdx.x].particle_id;
+    // for every cell,
+    // for every particle in that cell,
+    // if that particle exists in that cell in the new universe,
+    // cell.particle_list[next++] = particle
+    // else if particle id == -1
+    // cell.particle_list[next].particle_id = -1
+    // else continue
 
-    // update cell list with updated particles
-    // one block per cell
-    // one thread per cell not equal to block's cell
-    // that thread loops over each particle and copies it to home cell's particle list
-    int new_cell_x = cell_particle_list[threadIdx.x].x / (CELL_LENGTH_X * CELL_CUTOFF_RADIUS);
-    int new_cell_y = cell_particle_list[threadIdx.x].y / (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS);
-    int new_cell_z = cell_particle_list[threadIdx.x].z / (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS);
+    for (int current_cell_idx = 0; current_cell_idx < CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z; ++current_cell_idx) {
+        for (int particle_idx = 0; particle_idx < MAX_PARTICLES_PER_CELL && cell_list[current_cell_idx].particle_list[particle_idx].particle_id != -1; ++particle_idx) {
+            struct Particle current_particle = cell_list[current_cell_idx].particle_list[particle_idx].x;
+            int new_cell_x = current_particle.x / (CELL_LENGTH_X * CELL_CUTOFF_RADIUS);
+            int new_cell_y = current_particle.y / (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS);
+            int new_cell_z = current_particle.z / (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS);
 
-    accelerations[particle_id] = 0;
-    accelerations[particle_id + 1] = 0;
-    accelerations[particle_id + 2] = 0;
+            if (home_x == new_cell_x && home_y == new_cell_y && home_z == new_cell_z) {
+                cell.particle_list[free_idx++] = current_particle;
+            }
+        }
+    }
+    cell[free_idx].particle_id = -1;
 }
 
 // initialize cells with random particle data
@@ -215,7 +249,7 @@ int main()
     // output of force_eval is stores in device_cell_list and accelerations
     for (int t = 0; t < TIMESTEPS; ++t) {
         force_eval<<<numBlocksForce, threadsPerBlockForce>>>(device_cell_list, accelerations);
-        motion_update<<<numBlocksMotion, threadsPerBlockMotion>>>(device_cell_list, accelerations);
+        motion_update<<<numBlocksMotion, 1>>>(device_cell_list, accelerations);
     }
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
