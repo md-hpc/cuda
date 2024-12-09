@@ -50,18 +50,11 @@ struct Cell {
 };
 
 // LJ force computation
-// can probably optimize using linear algebras
 __device__ float compute_acceleration(float r1, float r2) {
     float r = fabsf(r1 - r2);
-    if (r == 0)
-        return 0;
-
-    // TODO: can optimize using branchless programming
     float force = 4 * EPSILON * (6 * powf(SIGMA, 6.0f) / powf(r, 7.0f) - 12 * powf(SIGMA, 12.0f) / powf(r, 13.0f));
-    if (force < LJMIN) {
-        force = LJMIN;
-    }
-    return force;
+
+    return (force < LJMIN) * LJMIN + !(force < LJMIN) * force;
 }
 
 // the meat:
