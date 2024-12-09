@@ -84,8 +84,8 @@ __global__ void force_eval(struct Cell *cell_list, float *accelerations)
     int neighbor_x = (blockIdx.y < 9) * PLUS_1(home_x, CELL_LENGTH_X)
                    + (blockIdx.y >= 9) * home_x;
     int neighbor_y = (blockIdx.y < 3) * MINUS_1(home_y, CELL_LENGTH_Y)
-                   + (blockIdx.y >= 3 && local_idx <= 5 || local_idx > 11) * home_y
-                   + (blockIdx.y >= 6 && local_idx <= 11) * PLUS_1(home_y, CELL_LENGTH_Y);
+                   + (blockIdx.y >= 3 && blockIdx.y <= 5 || blockIdx.y > 11) * home_y
+                   + (blockIdx.y >= 6 && blockIdx.y <= 11) * PLUS_1(home_y, CELL_LENGTH_Y);
     int neighbor_z = (blockIdx.y % 3 == 0) * PLUS_1(home_z, CELL_LENGTH_Z)
                    + (blockIdx.y % 3 == 1) * home_z
                    + (blockIdx.y % 3 == 2) * MINUS_1(home_z, CELL_LENGTH_Z);
@@ -280,8 +280,8 @@ int main()
         - (particle_id * 3) + 2 gives index of y
     */
     float *accelerations;
-    GPU_PERROR(cudaMalloc(&accelerations, MAX_PARTICLES * 3 * sizeof(float)));
-    GPU_PERROR(cudaMemset(accelerations, 0, MAX_PARTICLES * 3 * sizeof(float)));
+    GPU_PERROR(cudaMalloc(&accelerations, MAX_PARTICLES_PER_CELL * 3 * sizeof(float)));
+    GPU_PERROR(cudaMemset(accelerations, 0, MAX_PARTICLES_PER_CELL * 3 * sizeof(float)));
 
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
