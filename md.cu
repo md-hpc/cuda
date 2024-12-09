@@ -11,7 +11,7 @@
 #define NUM_PARTICLES 3
 #define MAX_PARTICLES_PER_CELL 128
 
-#define CELL_CUTOFF_RADIUS_A 100
+#define CELL_CUTOFF_RADIUS_ANGST 100
 #define CELL_LENGTH_X 3
 #define CELL_LENGTH_Y 3
 #define CELL_LENGTH_Z 3
@@ -74,29 +74,29 @@ __global__ void force_eval(struct Cell *cell_list, float *accelerations)
     */
 
     // find hcell coordinate based off of block index
-    int home_x = blockIdx.x / (14 * CELL_LENGTH_Y * CELL_LENGTH_Z) % CELL_LENGTH_X;
-    int home_y = blockIdx.x / (14 * CELL_LENGTH_Z) % CELL_LENGTH_Y;
-    int home_z = blockIdx.x / 14 % CELL_LENGTH_Z;
+    int home_x = blockIdx.x % CELL_LENGTH_X;
+    int home_y = blockIdx.x / CELL_LENGTH_X % CELL_LENGTH_Y;
+    int home_z = blockIdx.x / (CELL_LENGTH_Y * CELL_LENGTH_X) % CELL_LENGTH_Z;
 
     // trust me on this :)
-    // branchless programming
-    int local_idx = blockIdx.x % 14;
-    int neighbor_x = (local_idx < 9) * PLUS_1(home_x, CELL_LENGTH_X)
-                   + (local_idx >= 9) * home_x;
-    int neighbor_y = (local_idx < 3) * MINUS_1(home_y, CELL_LENGTH_Y)
-                   + (local_idx >= 3 && local_idx <= 5 || local_idx > 11) * home_y
-                   + (local_idx >= 6 && local_idx <= 11) * PLUS_1(home_y, CELL_LENGTH_Y);
-    int neighbor_z = (local_idx % 3 == 0) * PLUS_1(home_z, CELL_LENGTH_Z)
-                   + (local_idx % 3 == 1) * home_z
-                   + (local_idx % 3 == 2) * MINUS_1(home_z, CELL_LENGTH_Z);
+    // turns out, we don't need branchless programming here because all threads in a warp and all warps in a block will follow the same branch
+    // TODO: remove branchless programming here
+    int neighbor_x = (blockIdx.y < 9) * PLUS_1(home_x, CELL_LENGTH_X)
+                   + (blockIdx.y >= 9) * home_x;
+    int neighbor_y = (blockIdx.y < 3) * MINUS_1(home_y, CELL_LENGTH_Y)
+                   + (blockIdx.y >= 3 && local_idx <= 5 || local_idx > 11) * home_y
+                   + (blockIdx.y >= 6 && local_idx <= 11) * PLUS_1(home_y, CELL_LENGTH_Y);
+    int neighbor_z = (blockIdx.y % 3 == 0) * PLUS_1(home_z, CELL_LENGTH_Z)
+                   + (blockIdx.y % 3 == 1) * home_z
+                   + (blockIdx.y % 3 == 2) * MINUS_1(home_z, CELL_LENGTH_Z);
 
     // define and assign shared memory
     __shared__ struct Cell neighbor_cell;
-    neighbor_cell.particle_list[threadIdx.x] = cell_list[neighbor_z + neighbor_y * CELL_LENGTH_Z + neighbor_x * CELL_LENGTH_Z * CELL_LENGTH_Y].particle_list[threadIdx.x];
+    neighbor_cell.particle_list[threadIdx.x] = cell_list[neighbor_x + neighbor_y * CELL_LENGTH_X + neighbor_z * CELL_LENGTH_X * CELL_LENGTH_Y].particle_list[threadIdx.x];
 
     // set the particle thread is assigned to from particle from hcell
     // TODO: can optimize by splitting struct into positions and velocities and only memcpy the positions
-    struct Particle reference_particle = cell_list[home_z + home_y * CELL_LENGTH_Z + home_x * CELL_LENGTH_Z * CELL_LENGTH_Y].particle_list[threadIdx.x];
+    struct Particle reference_particle = cell_list[home_x + home_y * CELL_LENGTH_X + home_z * CELL_LENGTH_X * CELL_LENGTH_Y].particle_list[threadIdx.x];
 
     // synchronizes threads within a block (all threads must complete tasks)
     __syncthreads();
@@ -106,30 +106,41 @@ __global__ void force_eval(struct Cell *cell_list, float *accelerations)
     // if particle exists loop through every particle in ncell particle list
     if (reference_particle.particle_id != -1) {
         //TODO: (easy) write the rest of the force computation
-        for (int i = 0; i < MAX_PARTICLES_PER_CELL && neighbor_cell.particle_list[i].particle_id != -1; ++i) {
+        int neighbor_is_home = home_x == neighbor_x && home_y == neighbor_y && home_z == neighbor_z;
+        for (int i = 0; i < MAX_PARTICLES_PER_CELL; ++i) {
+            if (neighbor_cell.particle_list[i].particle_id == -1)
+                break;
+
+            if (neighbor_is_home && !(reference_particle.x < neighbor_cell.particle_list[i].x))
+                continue;
+
             int neighbor_particle_id = neighbor_cell.particle_list[i].particle_id;
-            // boolean expression can be optimized knowing the fact that one dimension of the neighboring half shell is only +1 and not -1
-            // for periodic boundary condition
-            float neighbor_particle_virtual_x = neighbor_cell.particle_list[i].x + ((home_x - neighbor_x == CELL_LENGTH_X - 1) + (neighbor_x - home_x == CELL_LENGTH_X - 1) * -1) * (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_A);
-            float neighbor_particle_virtual_y = neighbor_cell.particle_list[i].y + ((home_y - neighbor_y == CELL_LENGTH_Y - 1) + (neighbor_y - home_y == CELL_LENGTH_Y - 1) * -1) * (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_A);
-            float neighbor_particle_virtual_z = neighbor_cell.particle_list[i].z + ((home_z - neighbor_z == CELL_LENGTH_Z - 1) + (neighbor_z - home_z == CELL_LENGTH_Z - 1) * -1) * (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_A);
 
-            // computed accelerations
-            float ax = compute_acceleration(reference_particle.x, neighbor_particle_virtual_x);
-            float ay = compute_acceleration(reference_particle.y, neighbor_particle_virtual_y);
-            float az = compute_acceleration(reference_particle.z, neighbor_particle_virtual_z);
+            float ax, ay, az;
+            if (neighbor_is_home) {
+                ax = compute_acceleration(reference_particle.x, neighbor_cell.particle_list[i].x);
+                ay = compute_acceleration(reference_particle.y, neighbor_cell.particle_list[i].y);
+                az = compute_acceleration(reference_particle.z, neighbor_cell.particle_list[i].z);
+            } else {
+                // boolean expression can be optimized knowing the fact that one dimension of the neighboring half shell is only +1 and not -1
+                // for periodic boundary condition
+                float neighbor_particle_virtual_x = neighbor_cell.particle_list[i].x + ((home_x - neighbor_x == CELL_LENGTH_X - 1) + (neighbor_x - home_x == CELL_LENGTH_X - 1) * -1) * (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST);
+                float neighbor_particle_virtual_y = neighbor_cell.particle_list[i].y + ((home_y - neighbor_y == CELL_LENGTH_Y - 1) + (neighbor_y - home_y == CELL_LENGTH_Y - 1) * -1) * (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST);
+                float neighbor_particle_virtual_z = neighbor_cell.particle_list[i].z + ((home_z - neighbor_z == CELL_LENGTH_Z - 1) + (neighbor_z - home_z == CELL_LENGTH_Z - 1) * -1) * (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST);
 
-            // add home particle accelerations
+                // computed accelerations
+                ax = compute_acceleration(reference_particle.x, neighbor_particle_virtual_x);
+                ay = compute_acceleration(reference_particle.y, neighbor_particle_virtual_y);
+                az = compute_acceleration(reference_particle.z, neighbor_particle_virtual_z);
+            }
+
             atomicAdd(&accelerations[reference_particle.particle_id * 3], ax);
             atomicAdd(&accelerations[reference_particle.particle_id * 3 + 1], ay);
             atomicAdd(&accelerations[reference_particle.particle_id * 3 + 2], az);
 
-            // if not home cell, update the neighbor particle to be -(hcell acceleration) due to N3L
-            if (!(home_x == neighbor_x && home_y == neighbor_y && home_z == neighbor_z)) {
-                atomicAdd(&accelerations[neighbor_particle_id * 3], -ax);
-                atomicAdd(&accelerations[neighbor_particle_id * 3 + 1], -ay);
-                atomicAdd(&accelerations[neighbor_particle_id * 3 + 2], -az);
-            }
+            atomicAdd(&accelerations[neighbor_particle_id * 3], -ax);
+            atomicAdd(&accelerations[neighbor_particle_id * 3 + 1], -ay);
+            atomicAdd(&accelerations[neighbor_particle_id * 3 + 2], -az);
         }
     }
 }
@@ -146,9 +157,9 @@ __global__ void particle_update(struct Cell *cell_list, float *accelerations)
     cell_list[blockIdx.x].particle_list[threadIdx.x].vx += accelerations[reference_particle_id * 3] * TIMESTEP_DURATION_FS;
     cell_list[blockIdx.x].particle_list[threadIdx.x].vy += accelerations[reference_particle_id * 3 + 1] * TIMESTEP_DURATION_FS;
     cell_list[blockIdx.x].particle_list[threadIdx.x].vz += accelerations[reference_particle_id * 3 + 2] * TIMESTEP_DURATION_FS;
-    cell_list[blockIdx.x].particle_list[threadIdx.x].x = (cell_list[blockIdx.x].particle_list[threadIdx.x].x + cell_list[blockIdx.x].particle_list[threadIdx.x].vx * TIMESTEP_DURATION_FS) - (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_A) * floor(cell_list[blockIdx.x].particle_list[threadIdx.x].x / (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_A));
-    cell_list[blockIdx.x].particle_list[threadIdx.x].y = (cell_list[blockIdx.x].particle_list[threadIdx.x].y + cell_list[blockIdx.x].particle_list[threadIdx.x].vy * TIMESTEP_DURATION_FS) - (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_A) * floor(cell_list[blockIdx.x].particle_list[threadIdx.x].y / (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_A));
-    cell_list[blockIdx.x].particle_list[threadIdx.x].z = (cell_list[blockIdx.x].particle_list[threadIdx.x].z + cell_list[blockIdx.x].particle_list[threadIdx.x].vz * TIMESTEP_DURATION_FS) - (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_A) * floor(cell_list[blockIdx.x].particle_list[threadIdx.x].z / (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_A));
+    cell_list[blockIdx.x].particle_list[threadIdx.x].x = (cell_list[blockIdx.x].particle_list[threadIdx.x].x + cell_list[blockIdx.x].particle_list[threadIdx.x].vx * TIMESTEP_DURATION_FS) - (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST) * floor(cell_list[blockIdx.x].particle_list[threadIdx.x].x / (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST));
+    cell_list[blockIdx.x].particle_list[threadIdx.x].y = (cell_list[blockIdx.x].particle_list[threadIdx.x].y + cell_list[blockIdx.x].particle_list[threadIdx.x].vy * TIMESTEP_DURATION_FS) - (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST) * floor(cell_list[blockIdx.x].particle_list[threadIdx.x].y / (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST));
+    cell_list[blockIdx.x].particle_list[threadIdx.x].z = (cell_list[blockIdx.x].particle_list[threadIdx.x].z + cell_list[blockIdx.x].particle_list[threadIdx.x].vz * TIMESTEP_DURATION_FS) - (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST) * floor(cell_list[blockIdx.x].particle_list[threadIdx.x].z / (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST));
 
     accelerations[reference_particle_id] = 0;
 }
@@ -176,9 +187,9 @@ __global__ void motion_update(struct Cell *cell_list_src, struct Cell *cell_list
     for (int current_cell_idx = 0; current_cell_idx < CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z; ++current_cell_idx) {
         for (int particle_idx = 0; particle_idx < MAX_PARTICLES_PER_CELL && cell_list_src[current_cell_idx].particle_list[particle_idx].particle_id != -1; ++particle_idx) {
             struct Particle current_particle = cell_list_src[current_cell_idx].particle_list[particle_idx];
-            int new_cell_x = current_particle.x / (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_A);
-            int new_cell_y = current_particle.y / (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_A);
-            int new_cell_z = current_particle.z / (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_A);
+            int new_cell_x = current_particle.x / (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST);
+            int new_cell_y = current_particle.y / (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST);
+            int new_cell_z = current_particle.z / (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST);
 
             if (home_x == new_cell_x && home_y == new_cell_y && home_z == new_cell_z) {
                 cell_list_dst[home_x + home_y * CELL_LENGTH_X + home_z * CELL_LENGTH_X * CELL_LENGTH_Y].particle_list[free_idx++] = current_particle;
@@ -200,9 +211,9 @@ void initialize_cell_list(struct Cell cellList[CELL_LENGTH_X * CELL_LENGTH_Y * C
         // assign random particle data
         struct Particle particle = {
             .particle_id = i,
-            .x = x * CELL_CUTOFF_RADIUS_A + ((float) rand() / RAND_MAX) * CELL_CUTOFF_RADIUS_A,
-            .y = y * CELL_CUTOFF_RADIUS_A + ((float) rand() / RAND_MAX) * CELL_CUTOFF_RADIUS_A,
-            .z = z * CELL_CUTOFF_RADIUS_A + ((float) rand() / RAND_MAX) * CELL_CUTOFF_RADIUS_A,
+            .x = x * CELL_CUTOFF_RADIUS_ANGST + ((float) rand() / RAND_MAX) * CELL_CUTOFF_RADIUS_ANGST,
+            .y = y * CELL_CUTOFF_RADIUS_ANGST + ((float) rand() / RAND_MAX) * CELL_CUTOFF_RADIUS_ANGST,
+            .z = z * CELL_CUTOFF_RADIUS_ANGST + ((float) rand() / RAND_MAX) * CELL_CUTOFF_RADIUS_ANGST,
             .vx = 0,
             .vy = 0,
             .vz = 0,
@@ -235,7 +246,22 @@ int main()
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // initialize (or import) particle data for simulation
     struct Cell cell_list[CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z];
-    initialize_cell_list(cell_list);
+    //initialize_cell_list(cell_list);
+    cell_list[0].particle_list[0].particle_id = 0;
+    cell_list[0].particle_list[0].x = 0;
+    cell_list[0].particle_list[0].y = 0;
+    cell_list[0].particle_list[0].z = 0;
+    cell_list[0].particle_list[0].vx = 0;
+    cell_list[0].particle_list[0].vy = 0;
+    cell_list[0].particle_list[0].vz = 0;
+
+    cell_list[0].particle_list[1].particle_id = 1;
+    cell_list[0].particle_list[1].x = 1;
+    cell_list[0].particle_list[1].y = 1;
+    cell_list[0].particle_list[1].z = 1;
+    cell_list[0].particle_list[1].vx = 0;
+    cell_list[0].particle_list[1].vy = 0;
+    cell_list[0].particle_list[1].vz = 0;
     // device_cell_list stores an array of Cells, where each Cell contains a particle_list
     struct Cell *device_cell_list;
     // cudaMalloc initializes GPU global memory to be used as parameter for GPU kernel
@@ -254,8 +280,8 @@ int main()
         - (particle_id * 3) + 2 gives index of y
     */
     float *accelerations;
-    GPU_PERROR(cudaMalloc(&accelerations, MAX_PARTICLES_PER_CELL * 3 * sizeof(float)));
-    GPU_PERROR(cudaMemset(accelerations, 0, MAX_PARTICLES_PER_CELL * 3 * sizeof(float)));
+    GPU_PERROR(cudaMalloc(&accelerations, MAX_PARTICLES * 3 * sizeof(float)));
+    GPU_PERROR(cudaMemset(accelerations, 0, MAX_PARTICLES * 3 * sizeof(float)));
 
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -264,7 +290,7 @@ int main()
     // defines block and thread dimensions
     // dim3 is an integer vector type most commonly used to pass the grid and block dimensions in a kernel invocation [X x Y x Z]
     // there are 2^31 blocks in x dimension while y and z have at most 65536 blocks
-    dim3 numBlocksForce(CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * 14);        // (CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * 14) x 1 x 1
+    dim3 numBlocksForce(CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z, 14);        // (CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * 14) x 1 x 1
     dim3 numBlocksParticle(CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z);
     dim3 numBlocksMotion(CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z);            // (CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z) x 1 x 1
     dim3 threadsPerBlockForce(MAX_PARTICLES_PER_CELL);                              // MAX_PARTICLES_PER_CELL x 1 x 1
