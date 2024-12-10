@@ -159,15 +159,15 @@ __global__ void particle_update(struct Cell *cell_list, float *accelerations)
     cell_list[blockIdx.x].particle_list[threadIdx.x].vz += accelerations[reference_particle_id * 3 + 2] * TIMESTEP_DURATION_FS;
 
     float x = cell_list[blockIdx.x].particle_list[threadIdx.x].x + cell_list[blockIdx.x].particle_list[threadIdx.x].vx * TIMESTEP_DURATION_FS;
-    x += (x < 0) * (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST) + (x > CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST) * -(CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST)
+    x += (x < 0) * (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST) + (x > CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST) * -(CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST);
     cell_list[blockIdx.x].particle_list[threadIdx.x].x = x;
 
     float y = cell_list[blockIdx.x].particle_list[threadIdx.x].y + cell_list[blockIdx.x].particle_list[threadIdx.x].vy * TIMESTEP_DURATION_FS;
-    y += (y < 0) * (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST) + (y > CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST) * -(CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST)
+    y += (y < 0) * (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST) + (y > CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST) * -(CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST);
     cell_list[blockIdx.x].particle_list[threadIdx.x].y = y;
 
     float z = cell_list[blockIdx.x].particle_list[threadIdx.x].z + cell_list[blockIdx.x].particle_list[threadIdx.x].vz * TIMESTEP_DURATION_FS;
-    z += (z < 0) * (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST) + (z > CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST) * -(CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST)
+    z += (z < 0) * (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST) + (z > CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST) * -(CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST);
     cell_list[blockIdx.x].particle_list[threadIdx.x].z = z;
 
     accelerations[reference_particle_id] = 0;
@@ -330,7 +330,7 @@ int main()
             particle_update<<<numBlocksParticle, threadsPerBlockParticle>>>(device_cell_list1, accelerations);
             motion_update<<<numBlocksMotion, 1>>>(device_cell_list1, device_cell_list2);
         } else {
-            force_eval<<<numBlocksForce, threadsPerBlockForce>>>(device_cell_list2);
+            force_eval<<<numBlocksForce, threadsPerBlockForce>>>(device_cell_list2, accelerations);
             particle_update<<<numBlocksParticle, threadsPerBlockParticle>>>(device_cell_list2, accelerations);
             motion_update<<<numBlocksMotion, 1>>>(device_cell_list2, device_cell_list1);
         }
