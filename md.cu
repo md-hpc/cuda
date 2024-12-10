@@ -81,14 +81,28 @@ __global__ void force_eval(struct Cell *cell_list, float *accelerations)
     // trust me on this :)
     // turns out, we don't need branchless programming here because all threads in a warp and all warps in a block will follow the same branch
     // TODO: remove branchless programming here
-    int neighbor_x = (blockIdx.y < 9) * PLUS_1(home_x, CELL_LENGTH_X)
-                   + (blockIdx.y >= 9) * home_x;
-    int neighbor_y = (blockIdx.y < 3) * MINUS_1(home_y, CELL_LENGTH_Y)
-                   + (blockIdx.y >= 3 && blockIdx.y <= 5 || blockIdx.y > 11) * home_y
-                   + (blockIdx.y >= 6 && blockIdx.y <= 11) * PLUS_1(home_y, CELL_LENGTH_Y);
-    int neighbor_z = (blockIdx.y % 3 == 0) * PLUS_1(home_z, CELL_LENGTH_Z)
-                   + (blockIdx.y % 3 == 1) * home_z
-                   + (blockIdx.y % 3 == 2) * MINUS_1(home_z, CELL_LENGTH_Z);
+    int neighbor_x;
+    int neighbor_y;
+    int neighbor_z;
+
+    if (blockIdx.x < 9)
+        neighbor_x = PLUS_1(home_x, CELL_LENGTH_X);
+    else
+        neighbor_x = home_x;
+
+    if (blockIdx.y < 3)
+        neighbor_y = MINUS_1(home_y, CELL_LENGTH_Y);
+    else if (blockIdx.y >= 3 && blockIdx.y <= 5 || blockIdx.y > 11)
+        neighbor_y = home_y;
+    else
+        neighbor_y = PLUS_1(home_y, CELL_LENGTH_Y);
+
+    if (blockIdx.y % 3 == 0)
+        neighbor_z = PLUS_1(home_z, CELL_LENGTH_Z);
+    else if (blockIdx.y % 3 == 1)
+        neighbor_z = home_z;
+    else
+        neighbor_z = MINUS_1(home_z, CELL_LENGTH_Z);
 
     // define and assign shared memory
     __shared__ struct Cell neighbor_cell;
