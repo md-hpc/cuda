@@ -157,9 +157,18 @@ __global__ void particle_update(struct Cell *cell_list, float *accelerations)
     cell_list[blockIdx.x].particle_list[threadIdx.x].vx += accelerations[reference_particle_id * 3] * TIMESTEP_DURATION_FS;
     cell_list[blockIdx.x].particle_list[threadIdx.x].vy += accelerations[reference_particle_id * 3 + 1] * TIMESTEP_DURATION_FS;
     cell_list[blockIdx.x].particle_list[threadIdx.x].vz += accelerations[reference_particle_id * 3 + 2] * TIMESTEP_DURATION_FS;
-    cell_list[blockIdx.x].particle_list[threadIdx.x].x = (cell_list[blockIdx.x].particle_list[threadIdx.x].x + cell_list[blockIdx.x].particle_list[threadIdx.x].vx * TIMESTEP_DURATION_FS) - (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST) * floor(cell_list[blockIdx.x].particle_list[threadIdx.x].x / (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST));
-    cell_list[blockIdx.x].particle_list[threadIdx.x].y = (cell_list[blockIdx.x].particle_list[threadIdx.x].y + cell_list[blockIdx.x].particle_list[threadIdx.x].vy * TIMESTEP_DURATION_FS) - (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST) * floor(cell_list[blockIdx.x].particle_list[threadIdx.x].y / (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST));
-    cell_list[blockIdx.x].particle_list[threadIdx.x].z = (cell_list[blockIdx.x].particle_list[threadIdx.x].z + cell_list[blockIdx.x].particle_list[threadIdx.x].vz * TIMESTEP_DURATION_FS) - (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST) * floor(cell_list[blockIdx.x].particle_list[threadIdx.x].z / (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST));
+
+    float x = cell_list[blockIdx.x].particle_list[threadIdx.x].x + cell_list[blockIdx.x].particle_list[threadIdx.x].vx * TIMESTEP_DURATION_FS;
+    x += (x < 0) * (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST) + (x > CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST) * -(CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST)
+    cell_list[blockIdx.x].particle_list[threadIdx.x].x = x;
+
+    float y = cell_list[blockIdx.x].particle_list[threadIdx.x].y + cell_list[blockIdx.x].particle_list[threadIdx.x].vy * TIMESTEP_DURATION_FS;
+    y += (y < 0) * (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST) + (y > CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST) * -(CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST)
+    cell_list[blockIdx.x].particle_list[threadIdx.x].y = y;
+
+    float z = cell_list[blockIdx.x].particle_list[threadIdx.x].z + cell_list[blockIdx.x].particle_list[threadIdx.x].vz * TIMESTEP_DURATION_FS;
+    z += (z < 0) * (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST) + (z > CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST) * -(CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST)
+    cell_list[blockIdx.x].particle_list[threadIdx.x].z = z;
 
     accelerations[reference_particle_id] = 0;
 }
@@ -187,9 +196,9 @@ __global__ void motion_update(struct Cell *cell_list_src, struct Cell *cell_list
     for (int current_cell_idx = 0; current_cell_idx < CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z; ++current_cell_idx) {
         for (int particle_idx = 0; particle_idx < MAX_PARTICLES_PER_CELL && cell_list_src[current_cell_idx].particle_list[particle_idx].particle_id != -1; ++particle_idx) {
             struct Particle current_particle = cell_list_src[current_cell_idx].particle_list[particle_idx];
-            int new_cell_x = (current_particle.x + ((current_particle.x < 0) * CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST)) / (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST);
-            int new_cell_y = (current_particle.y + ((current_particle.y < 0) * CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST)) / (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST);
-            int new_cell_z = (current_particle.z + ((current_particle.z < 0) * CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST)) / (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST);
+            int new_cell_x = current_particle.x / (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST);
+            int new_cell_y = current_particle.y / (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST);
+            int new_cell_z = current_particle.z / (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST);
 
             if (home_x == new_cell_x && home_y == new_cell_y && home_z == new_cell_z) {
                 cell_list_dst[home_x + home_y * CELL_LENGTH_X + home_z * CELL_LENGTH_X * CELL_LENGTH_Y].particle_list[free_idx++] = current_particle;
