@@ -273,10 +273,12 @@ int main()
     cell_list[0].particle_list[1].vy = 0;
     cell_list[0].particle_list[1].vz = 0;
     // device_cell_list stores an array of Cells, where each Cell contains a particle_list
-    struct Cell *device_cell_list;
+    struct Cell *device_cell_list1;
+    struct Cell *device_cell_list2;
     // cudaMalloc initializes GPU global memory to be used as parameter for GPU kernel
-    GPU_PERROR(cudaMalloc(&device_cell_list, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell) * 2));
-    GPU_PERROR(cudaMemcpy(device_cell_list, cell_list, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyHostToDevice));
+    GPU_PERROR(cudaMalloc(&device_cell_list1, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell)));
+    GPU_PERROR(cudaMalloc(&device_cell_list2, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell)));
+    GPU_PERROR(cudaMemcpy(device_cell_list1, cell_list, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyHostToDevice));
 
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -290,8 +292,8 @@ int main()
         - (particle_id * 3) + 2 gives index of y
     */
     float *accelerations;
-    GPU_PERROR(cudaMalloc(&accelerations, MAX_PARTICLES_PER_CELL * 3 * sizeof(float)));
-    GPU_PERROR(cudaMemset(accelerations, 0, MAX_PARTICLES_PER_CELL * 3 * sizeof(float)));
+    GPU_PERROR(cudaMalloc(&accelerations, NUM_PARTICLES * 3 * sizeof(float)));
+    GPU_PERROR(cudaMemset(accelerations, 0, NUM_PARTICLES * 3 * sizeof(float)));
 
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -324,13 +326,13 @@ int main()
 
     for (int t = 0; t < TIMESTEPS; ++t) {
         if (flag) {
-            force_eval<<<numBlocksForce, threadsPerBlockForce>>>(device_cell_list, accelerations);
-            particle_update<<<numBlocksParticle, threadsPerBlockParticle>>>(device_cell_list, accelerations);
-            motion_update<<<numBlocksMotion, 1>>>(device_cell_list, device_cell_list + sizeof(cell_list));
+            force_eval<<<numBlocksForce, threadsPerBlockForce>>>(device_cell_list1, accelerations);
+            particle_update<<<numBlocksParticle, threadsPerBlockParticle>>>(device_cell_list1, accelerations);
+            motion_update<<<numBlocksMotion, 1>>>(device_cell_list1, device_cell_list2);
         } else {
-            force_eval<<<numBlocksForce, threadsPerBlockForce>>>(device_cell_list + sizeof(cell_list), accelerations);
-            particle_update<<<numBlocksParticle, threadsPerBlockParticle>>>(device_cell_list, accelerations);
-            motion_update<<<numBlocksMotion, 1>>>(device_cell_list + sizeof(cell_list), device_cell_list);
+            force_eval<<<numBlocksForce, threadsPerBlockForce>>>(device_cell_list2);
+            particle_update<<<numBlocksParticle, threadsPerBlockParticle>>>(device_cell_list2, accelerations);
+            motion_update<<<numBlocksMotion, 1>>>(device_cell_list2, device_cell_list1);
         }
         flag = !flag;
     }
@@ -341,11 +343,12 @@ int main()
     // if flag == 0, then results are in the second half
     // if flag == 1, then results are in the first half
     if (flag) {
-        GPU_PERROR(cudaMemcpy(cell_list, device_cell_list, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyDeviceToHost));
+        GPU_PERROR(cudaMemcpy(cell_list, device_cell_list1, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyDeviceToHost));
     } else {
-        GPU_PERROR(cudaMemcpy(cell_list, device_cell_list + sizeof(cell_list), CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyDeviceToHost));
+        GPU_PERROR(cudaMemcpy(cell_list, device_cell_list2, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyDeviceToHost));
     }
-    GPU_PERROR(cudaFree(device_cell_list));
+    GPU_PERROR(cudaFree(device_cell_list1));
+    GPU_PERROR(cudaFree(device_cell_list2));
 
     for (int x = 0; x < CELL_LENGTH_X; ++x) {
         for (int y = 0; y < CELL_LENGTH_Y; ++y) {
