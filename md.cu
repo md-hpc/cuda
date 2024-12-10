@@ -24,12 +24,12 @@
 
 #define PLUS_1(dimension, length) ((dimension != length - 1) * (dimension + 1))
 #define MINUS_1(dimension, length) ((dimension == 0) * length + dimension - 1)
-#define GPU_PERROR(err) while (0) {\
+#define GPU_PERROR(err) do {\
     if (err != cudaSuccess) {\
         fprintf(stderr,"gpu_perror: %s %s %d\n", cudaGetErrorString(err), __FILE__, __LINE__);\
         exit(err);\
     }\
-}
+} while (0);
 	
 
 
@@ -187,9 +187,9 @@ __global__ void motion_update(struct Cell *cell_list_src, struct Cell *cell_list
     for (int current_cell_idx = 0; current_cell_idx < CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z; ++current_cell_idx) {
         for (int particle_idx = 0; particle_idx < MAX_PARTICLES_PER_CELL && cell_list_src[current_cell_idx].particle_list[particle_idx].particle_id != -1; ++particle_idx) {
             struct Particle current_particle = cell_list_src[current_cell_idx].particle_list[particle_idx];
-            int new_cell_x = current_particle.x / (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST);
-            int new_cell_y = current_particle.y / (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST);
-            int new_cell_z = current_particle.z / (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST);
+            int new_cell_x = (current_particle.x + ((current_particle.x < 0) * CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST)) / (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST);
+            int new_cell_y = (current_particle.y + ((current_particle.y < 0) * CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST)) / (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST);
+            int new_cell_z = (current_particle.z + ((current_particle.z < 0) * CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST)) / (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST);
 
             if (home_x == new_cell_x && home_y == new_cell_y && home_z == new_cell_z) {
                 cell_list_dst[home_x + home_y * CELL_LENGTH_X + home_z * CELL_LENGTH_X * CELL_LENGTH_Y].particle_list[free_idx++] = current_particle;
