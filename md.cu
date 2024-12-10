@@ -246,6 +246,7 @@ int main()
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // initialize (or import) particle data for simulation
     struct Cell cell_list[CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z];
+    memset(cell_list, -1, sizeof(struct Cell)*CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z);
     //initialize_cell_list(cell_list);
     cell_list[0].particle_list[0].particle_id = 0;
     cell_list[0].particle_list[0].x = 0;
