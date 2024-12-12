@@ -218,21 +218,28 @@ __global__ void motion_update(struct Cell *cell_list_src, struct Cell *cell_list
     int home_z = blockIdx.x / (CELL_LENGTH_X * CELL_LENGTH_Y) % CELL_LENGTH_Z;
 
     // location of where thread is in buffer
-    int free_idx = 0;
+    __shared__ int free_idx;
+    if (threadIdx.x == 0)
+        free_idx = 0;
+    __syncthreads();
 
     for (int current_cell_idx = 0; current_cell_idx < CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z; ++current_cell_idx) {
-        for (int particle_idx = 0; particle_idx < MAX_PARTICLES_PER_CELL && cell_list_src[current_cell_idx].particle_list[particle_idx].particle_id != -1; ++particle_idx) {
-            struct Particle current_particle = cell_list_src[current_cell_idx].particle_list[particle_idx];
-            int new_cell_x = current_particle.x / (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST);
-            int new_cell_y = current_particle.y / (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST);
-            int new_cell_z = current_particle.z / (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST);
+        struct Particle current_particle = cell_list_src[current_cell_idx].particle_list[threadIdx.x];
+        if (current_particle.particle_id == -1)
+            continue;
 
-            if (home_x == new_cell_x && home_y == new_cell_y && home_z == new_cell_z) {
-                cell_list_dst[home_x + home_y * CELL_LENGTH_X + home_z * CELL_LENGTH_X * CELL_LENGTH_Y].particle_list[free_idx++] = current_particle;
-            }
+        int new_cell_x = current_particle.x / (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST);
+        int new_cell_y = current_particle.y / (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST);
+        int new_cell_z = current_particle.z / (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST);
+
+        if (home_x == new_cell_x && home_y == new_cell_y && home_z == new_cell_z) {
+            int idx = atomicAdd(&free_idx, 1);
+            cell_list_dst[blockIdx.x].particle_list[idx] = current_particle;
         }
     }
-    cell_list_dst[home_x + home_y * CELL_LENGTH_X + home_z * CELL_LENGTH_X * CELL_LENGTH_Y].particle_list[free_idx].particle_id = -1;
+
+    if (threadIdx.x == 0)
+        cell_list_dst[blockIdx.x].particle_list[free_idx].particle_id = -1;
 }
 
 // initialize cells with random particle data
@@ -355,11 +362,11 @@ int main()
         if (flag) {
             force_eval<<<numBlocksForce, threadsPerBlockForce>>>(device_cell_list1, accelerations);
             particle_update<<<numBlocksParticle, threadsPerBlockParticle>>>(device_cell_list1, accelerations);
-            motion_update<<<numBlocksMotion, 1>>>(device_cell_list1, device_cell_list2);
+            motion_update<<<numBlocksMotion, MAX_PARTICLES_PER_CELL>>>(device_cell_list1, device_cell_list2);
         } else {
             force_eval<<<numBlocksForce, threadsPerBlockForce>>>(device_cell_list2, accelerations);
             particle_update<<<numBlocksParticle, threadsPerBlockParticle>>>(device_cell_list2, accelerations);
-            motion_update<<<numBlocksMotion, 1>>>(device_cell_list2, device_cell_list1);
+            motion_update<<<numBlocksMotion, MAX_PARTICLES_PER_CELL>>>(device_cell_list2, device_cell_list1);
         }
         flag = !flag;
     }
