@@ -362,11 +362,11 @@ int main()
         if (flag) {
             force_eval<<<numBlocksForce, threadsPerBlockForce>>>(device_cell_list1, accelerations);
             particle_update<<<numBlocksParticle, threadsPerBlockParticle>>>(device_cell_list1, accelerations);
-            motion_update<<<numBlocksMotion, 1>>>(device_cell_list1, device_cell_list2);
+            motion_update<<<numBlocksMotion, MAX_PARTICLES_PER_CELL>>>(device_cell_list1, device_cell_list2);
         } else {
             force_eval<<<numBlocksForce, threadsPerBlockForce>>>(device_cell_list2, accelerations);
             particle_update<<<numBlocksParticle, threadsPerBlockParticle>>>(device_cell_list2, accelerations);
-            motion_update<<<numBlocksMotion, 1>>>(device_cell_list2, device_cell_list1);
+            motion_update<<<numBlocksMotion, MAX_PARTICLES_PER_CELL>>>(device_cell_list2, device_cell_list1);
         }
         flag = !flag;
     }
