@@ -1,3 +1,4 @@
+#include "pdb_importer.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <curand.h>
@@ -31,18 +32,6 @@
     }\
 } while (0);
 	
-
-
-// particle stores coordinates and velocities in x,y,z dimensions
-struct Particle {
-    int particle_id;
-    float x;
-    float y;
-    float z;
-    float vx;
-    float vy;
-    float vz;
-};
 
 // cell is an array of particles
 struct Cell {
