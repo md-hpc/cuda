@@ -1,17 +1,8 @@
+#include "pdb_importer.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <sys/errno.h>
-
-struct Particle {
-    int particle_id;
-    float x;
-    float y;
-    float z;
-    float vx;
-    float vy;
-    float vz;
-};
 
 int import_atoms(const char *const filename, struct Particle **particle_list, int *particle_count)
 {
