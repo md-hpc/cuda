@@ -11,6 +11,10 @@ struct Particle {
     float vz;
 };
 
+struct Cell {
+    struct Particle particle_list[MAX_PARTICLES_PER_CELL];
+};
+
 /**
  * Reads atomic data from a .pdb file, extracting positions for particles.
  * Dynamically allocates memory for the particle list and returns the count.
@@ -21,5 +25,26 @@ struct Particle {
  * @return 0 on success, errno on failure.
  */
 int import_atoms(const char *const filename, struct Particle **particle_list, int *particle_count);
+
+/**
+ * @brief Assigns particles to a spatial cell grid based on their positions.
+ *
+ * This function distributes particles into a grid of cells for efficient spatial
+ * partitioning, which can be useful for simulations such as molecular dynamics
+ * or particle-based physics computations.
+ *
+ * @param particle_list      Pointer to an array of particles.
+ * @param particle_count     Number of particles in the particle_list.
+ * @param cell_list          Pointer to an array of cells that store particles.
+ * @param x_dim              Number of cells along the x-axis.
+ * @param y_dim              Number of cells along the y-axis.
+ * @param cell_cutoff_radius The size of each cell, defining the partitioning scale.
+ *
+ * @note This function assumes that the `particle_list` contains valid particle data
+ *       with defined x, y, and z coordinates. Additionally, the `cell_list` must
+ *       have sufficient memory allocated to store the particles.
+ */
+void create_cell_list(struct Particle *particle_list, int particle_count,
+                      struct Cell *cell_list, int x_dim, int y_dim, int cell_cutoff_radius);
 
 #endif /* PDB_IMPORTER_H */

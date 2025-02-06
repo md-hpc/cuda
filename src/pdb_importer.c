@@ -50,3 +50,19 @@ int import_atoms(const char *const filename, struct Particle **particle_list, in
 
     return 0;
 }
+
+void create_cell_list(struct Particle *particle_list, int particle_count,
+                     struct Cell *cell_list, int x_dim, int y_dim, int cell_cutoff_radius)
+{
+    int free_idx[x_dim * y_dim * z_dim] = {0};
+
+    for (int i = 0; i < particle_count; ++i) {
+        int x_cell = particle_list[i].x / cell_cutoff_radius;
+        int y_cell = particle_list[i].y / cell_cutoff_radius;
+        int z_cell = particle_list[i].z / cell_cutoff_radius;
+
+        int cell_idx = x_cell + y_cell * x_dim + z_cell * x_dim * y_dim;
+
+        cell_list[cell_idx].particle_list[free_idx[cell_idx]++] = particle_list[i];
+    }
+}
