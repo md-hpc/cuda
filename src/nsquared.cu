@@ -4,9 +4,16 @@
 #include <curand.h>
 
 #define MAX_PARTICLES_PER_BLOCK 1024
+#define CELL_CUTOFF_RADIUS_ANGST 100
 #define EPSILON 1
 #define SIGMA 1
 #define LJMIN (-4.0f * 24.0f * EPSILON / SIGMA * (powf(7.0f / 26.0f, 7.0f / 6.0f) - 2.0f * powf(7.0f / 26.0f, 13.0f / 6.0f)))
+#define GPU_PERROR(err) do {\
+    if (err != cudaSuccess) {\
+        fprintf(stderr,"gpu_perror: %s %s %d\n", cudaGetErrorString(err), __FILE__, __LINE__);\
+        exit(err);\
+    }\
+} while (0);
 
 
 __device__ float compute_acceleration(float r1, float r2) {
@@ -57,14 +64,13 @@ __global__ void timestep(struct Particle *src_particle_list, struct Particle *ds
 
 int main(int argc, char **argv) 
 {
-    if (argc != 4) {
-        printf("Usage: ./nsquared <input_file> <output_file> <timesteps>\n");
+    if (argc != 3) {
+        printf("Usage: ./nsquared <input_file> <output_file>\n");
         return 1; 
     }
     
     const char *input_file = argv[1];
     const char *output_file = argv[2];
-    unsigned int timesteps = argv[3];
 
     int particle_count;
     struct Particle *particle_list;
@@ -79,7 +85,7 @@ int main(int argc, char **argv)
     // set parameters
     dim3 numBlocks(128);
     dim3 threadsPerBlock(MAX_PARTICLES_PER_BLOCK);
-    for (int t = 1l t <= timesteps; ++t) {
+    for (int t = 1l; t <= TIMESTEPS; ++t) {
         if (t & 1) {
             timestep<<<numBlocks, threadsPerBlock>>>(device_particle_list_1, device_particle_list_2, particle_count);
         } else {
@@ -87,11 +93,11 @@ int main(int argc, char **argv)
         }
     }
 
-    struct Particle *out_list = malloc(particle_count * sizeof(struct Particle));
-    if (timesteps & 1)
-        GPU_PERROR(cudaMemcpy(out_list, device_particle_list_1, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost))
+    struct Particle *out_list = (struct Particle *) malloc(particle_count * sizeof(struct Particle));
+    if (TIMESTEPS & 1)
+        GPU_PERROR(cudaMemcpy(out_list, device_particle_list_1, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
     else
-        GPU_PERROR(cudaMemcpy(out_list, device_particle_list_2, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost))
+        GPU_PERROR(cudaMemcpy(out_list, device_particle_list_2, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
         
     GPU_PERROR(cudaFree(device_particle_list_1));
     GPU_PERROR(cudaFree(device_particle_list_2));
