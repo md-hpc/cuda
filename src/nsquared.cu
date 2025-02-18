@@ -31,6 +31,9 @@ __global__ void timestep(struct Particle *src_particle_list, struct Particle *ds
 {
     // each thread gets a particle as a reference particle
     int reference_particle_idx = blockIdx.x * blockDim.x + threadIdx.x;
+    
+    if (reference_particle_idx >= particle_count) return; 
+
     struct Particle reference_particle = src_particle_list[reference_particle_idx];
 
     float ax = 0;
@@ -73,7 +76,7 @@ int main(int argc, char **argv)
         return 1; 
     }
     
-    char * input_file = argv[1];
+    char *input_file = argv[1];
     char *output_file = argv[2];
 
     int particle_count;
@@ -87,7 +90,7 @@ int main(int argc, char **argv)
     GPU_PERROR(cudaMemcpy(device_particle_list_1, particle_list, particle_count * sizeof(struct Particle), cudaMemcpyHostToDevice));
 
     // set parameters
-    dim3 numBlocks(128);
+    dim3 numBlocks((particle_count - 1) / 1024 + 1);
     dim3 threadsPerBlock(MAX_PARTICLES_PER_BLOCK);
     for (int t = 1l; t <= TIMESTEPS; ++t) {
         if (t & 1) {
