@@ -94,10 +94,11 @@ int main(int argc, char **argv)
     }
 
     struct Particle *out_list = (struct Particle *) malloc(particle_count * sizeof(struct Particle));
-    if (TIMESTEPS & 1)
+    if (TIMESTEPS & 1) {
         GPU_PERROR(cudaMemcpy(out_list, device_particle_list_1, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
-    else
+    } else {
         GPU_PERROR(cudaMemcpy(out_list, device_particle_list_2, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
+    }
         
     GPU_PERROR(cudaFree(device_particle_list_1));
     GPU_PERROR(cudaFree(device_particle_list_2));
