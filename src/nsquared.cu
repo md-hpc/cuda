@@ -1,4 +1,8 @@
+extern "C" {
+
 #include "pdb_importer.h"
+
+}
 #include <stdio.h>
 #include <stdlib.h>
 #include <curand.h>
@@ -69,8 +73,8 @@ int main(int argc, char **argv)
         return 1; 
     }
     
-    const char *const input_file = argv[1];
-    const char *output_file = argv[2];
+    char * input_file = argv[1];
+    char *output_file = argv[2];
 
     int particle_count;
     struct Particle *particle_list;
@@ -95,9 +99,9 @@ int main(int argc, char **argv)
 
     struct Particle *out_list = (struct Particle *) malloc(particle_count * sizeof(struct Particle));
     if (TIMESTEPS & 1) {
-        GPU_PERROR(cudaMemcpy(out_list, device_particle_list_1, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
-    } else {
         GPU_PERROR(cudaMemcpy(out_list, device_particle_list_2, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
+    } else {
+        GPU_PERROR(cudaMemcpy(out_list, device_particle_list_1, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
     }
         
     GPU_PERROR(cudaFree(device_particle_list_1));
