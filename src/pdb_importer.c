@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <sys/errno.h>
 
-int import_atoms(const char *const filename, struct Particle **particle_list, int *particle_count)
+int import_atoms(char *filename, struct Particle **particle_list, int *particle_count)
 {
     FILE *file = fopen(filename, "r");
     if (file == NULL) {
