@@ -8,7 +8,6 @@
 #define SIGMA 1
 #define LJMIN (-4.0f * 24.0f * EPSILON / SIGMA * (powf(7.0f / 26.0f, 7.0f / 6.0f) - 2.0f * powf(7.0f / 26.0f, 13.0f / 6.0f)))
 
-float timestep_duration;
 
 __device__ float compute_acceleration(float r1, float r2) {
     float r = fabsf(r1 - r2);
@@ -36,20 +35,20 @@ __global__ void timestep(struct Particle *src_particle_list, struct Particle *ds
     }
 
     // calculate velocity for reference particle
-    reference_particle.vx += ax * timestep_duration;
-    reference_particle.vy += ay * timestep_duration;
-    reference_particle.vz += az * timestep_duration;
+    reference_particle.vx += ax * TIMESTEP_DURATION;
+    reference_particle.vy += ay * TIMESTEP_DURATION;
+    reference_particle.vz += az * TIMESTEP_DURATION;
 
     // get new reference particle position taking into account periodic boundary conditions
-    float x = reference_particle.x + reference_particle.vx * timestep_duration;
+    float x = reference_particle.x + reference_particle.vx * TIMESTEP_DURATION;
     x += ((x < 0) - (x > CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST)) * (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST);
     reference_particle.x = x;
 
-    float y = reference_particle.y + reference_particle.vy * timestep_duration;
+    float y = reference_particle.y + reference_particle.vy * TIMESTEP_DURATION;
     y += ((y < 0) - (y > CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST)) * (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST);
     reference_particle.y = y;
 
-    float z = reference_particle.z + reference_particle.vz * timestep_duration;
+    float z = reference_particle.z + reference_particle.vz * TIMESTEP_DURATION;
     z += ((z < 0) - (z > CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST)) * (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST);
     reference_particle.z = z;
 
@@ -58,15 +57,14 @@ __global__ void timestep(struct Particle *src_particle_list, struct Particle *ds
 
 int main(int argc, char **argv) 
 {
-    if (argc != 5) {
-        printf("Usage: ./nsquared <input_file> <output_file> <timesteps> <step_duration>\n");
+    if (argc != 4) {
+        printf("Usage: ./nsquared <input_file> <output_file> <timesteps>\n");
         return 1; 
     }
     
     const char *input_file = argv[1];
     const char *output_file = argv[2];
     unsigned int timesteps = argv[3];
-    timestep_duration = argv[4];
 
     int particle_count;
     struct Particle *particle_list;
