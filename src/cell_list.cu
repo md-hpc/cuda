@@ -31,12 +31,6 @@
         exit(err);\
     }\
 } while (0);
-	
-
-// cell is an array of particles
-struct Cell {
-    struct Particle particle_list[MAX_PARTICLES_PER_CELL];
-};
 
 // LJ force computation
 __device__ float compute_acceleration(float r1, float r2) {
