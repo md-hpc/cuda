@@ -34,9 +34,8 @@ extern "C" {
 } while (0);
 
 // LJ force computation
-__device__ float compute_acceleration(float r1, float r2) {
-    float r = fabsf(r1 - r2);
-    float force = 4 * EPSILON * (6 * powf(SIGMA, 6.0f) / powf(r, 7.0f) - 12 * powf(SIGMA, 12.0f) / powf(r, 13.0f));
+__device__ float compute_acceleration(float r) {
+    float force = 4 * EPSILON * (12 * powf(SIGMA, 12.0f) / powf(r, 13.0f) - 6 * powf(SIGMA, 6.0f) / powf(r, 7.0f));
 
     return (force < LJMIN) * LJMIN + !(force < LJMIN) * force;
 }
@@ -121,9 +120,9 @@ __global__ void force_eval(struct Cell *cell_list, float *accelerations)
     int reference_particle_id = cell_list[home_idx].particle_list[threadIdx.x].particle_id;
     // if particle exists loop through every particle in ncell particle list
     if (reference_particle_id != -1) {
-        int reference_particle_x = cell_list[home_idx].particle_list[threadIdx.x].x;
-        int reference_particle_y = cell_list[home_idx].particle_list[threadIdx.x].y;
-        int reference_particle_z = cell_list[home_idx].particle_list[threadIdx.x].z;
+        float reference_particle_x = cell_list[home_idx].particle_list[threadIdx.x].x;
+        float reference_particle_y = cell_list[home_idx].particle_list[threadIdx.x].y;
+        float reference_particle_z = cell_list[home_idx].particle_list[threadIdx.x].z;
 
         float reference_particle_ax = 0;
         float reference_particle_ay = 0;
@@ -133,12 +132,23 @@ __global__ void force_eval(struct Cell *cell_list, float *accelerations)
             if (neighbor_cell.particle_list[i].particle_id == -1)
                 break;
 
-            if (neighbor_is_home && !(reference_particle_x < neighbor_cell.particle_list[i].x))
+            float neighbor_particle_x = neighbor_cell.particle_list[i].x;
+            float neighbor_particle_y = neighbor_cell.particle_list[i].y;
+            float neighbor_particle_z = neighbor_cell.particle_list[i].z;
+
+            if (neighbor_is_home && !(reference_particle_x < neighbor_particle_x))
                 continue;
 
-            float ax = compute_acceleration(reference_particle_x, neighbor_cell.particle_list[i].x);
-            float ay = compute_acceleration(reference_particle_y, neighbor_cell.particle_list[i].y);
-            float az = compute_acceleration(reference_particle_z, neighbor_cell.particle_list[i].z);
+            float norm = sqrt(
+                pow(reference_particle_x - neighbor_particle_x, 2) +
+                pow(reference_particle_y - neighbor_particle_y, 2) +
+                pow(reference_particle_z - neighbor_particle_z, 2)
+            );
+
+            float acceleration = compute_acceleration(norm);
+            float ax = acceleration * reference_particle_x / norm;
+            float ay = acceleration * reference_particle_y / norm;
+            float az = acceleration * reference_particle_z / norm;
 
             reference_particle_ax += ax;
             reference_particle_ay += ay;
@@ -226,45 +236,6 @@ __global__ void motion_update(struct Cell *cell_list_src, struct Cell *cell_list
         cell_list_dst[blockIdx.x].particle_list[free_idx].particle_id = -1;
 }
 
-// initialize cells with random particle data
-void initialize_cell_list(struct Cell cellList[CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z])
-{
-    // initialize cell list, -1 for empty cell
-    memset(cellList, -1, sizeof(struct Cell)*CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z);
-    for (int i = 0; i < NUM_PARTICLES; ++i) {
-        int x = rand() % CELL_LENGTH_X;
-        int y = rand() % CELL_LENGTH_Y;
-        int z = rand() % CELL_LENGTH_Z;
-        // assign random particle data
-        struct Particle particle = {
-            .particle_id = i,
-            .x = x * CELL_CUTOFF_RADIUS_ANGST + ((float) rand() / RAND_MAX) * CELL_CUTOFF_RADIUS_ANGST,
-            .y = y * CELL_CUTOFF_RADIUS_ANGST + ((float) rand() / RAND_MAX) * CELL_CUTOFF_RADIUS_ANGST,
-            .z = z * CELL_CUTOFF_RADIUS_ANGST + ((float) rand() / RAND_MAX) * CELL_CUTOFF_RADIUS_ANGST,
-            .vx = 0,
-            .vy = 0,
-            .vz = 0,
-        };
-        // copy particle to to cell list
-        for (int j = 0; j < MAX_PARTICLES_PER_CELL; ++j) {
-            if (cellList[x + y * CELL_LENGTH_X + z * CELL_LENGTH_X * CELL_LENGTH_Y].particle_list[j].particle_id == -1) {
-                memcpy(&cellList[x + y * CELL_LENGTH_X + z * CELL_LENGTH_X * CELL_LENGTH_Y].particle_list[j], &particle, sizeof(struct Particle));
-                break;
-            }
-        }
-    }
-    for (int x = 0; x < CELL_LENGTH_X; ++x) {
-        for (int y = 0; y < CELL_LENGTH_Y; ++y) {
-            for (int z = 0; z < CELL_LENGTH_Z; ++z) {
-                int count = 0;
-                while (cellList[x + y * CELL_LENGTH_X + z * CELL_LENGTH_X * CELL_LENGTH_Y].particle_list[count].particle_id != -1) {
-                    printf("%d: (%f, %f, %f)\n", cellList[x + y * CELL_LENGTH_X + z * CELL_LENGTH_X * CELL_LENGTH_Y].particle_list[count].particle_id, cellList[x + y * CELL_LENGTH_X + z * CELL_LENGTH_X * CELL_LENGTH_Y].particle_list[count].x , cellList[x + y * CELL_LENGTH_X + z * CELL_LENGTH_X * CELL_LENGTH_Y].particle_list[count].y, cellList[x + y * CELL_LENGTH_X + z * CELL_LENGTH_X * CELL_LENGTH_Y].particle_list[count].z);
-                    count++;
-                }
-            }
-        }
-    }
-}
 
 int main(int argc, char **argv) 
 {
