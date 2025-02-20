@@ -1,4 +1,6 @@
+extern "C" {
 #include "pdb_importer.h"
+}
 #include <stdio.h>
 #include <stdlib.h>
 #include <curand.h>
@@ -18,7 +20,6 @@
 #define CELL_LENGTH_Z 3
 
 #define TIMESTEPS 1
-#define TIMESTEP_DURATION_FS 1                            
 #define EPSILON 1.0f
 #define SIGMA 1.0f
 #define LJMIN (-4.0f * 24.0f * EPSILON / SIGMA * (powf(7.0f / 26.0f, 7.0f / 6.0f) - 2.0f * powf(7.0f / 26.0f, 13.0f / 6.0f)))
@@ -265,33 +266,32 @@ void initialize_cell_list(struct Cell cellList[CELL_LENGTH_X * CELL_LENGTH_Y * C
     }
 }
 
-int main() 
+int main(int argc, char **argv) 
 {
+
+    if (argc != 3) {
+	    printf("Usage: ./cell_list <input_file> <output_file>\n");
+	    return 1;
+    }
+    char *input_file = argv[1];
+    char *output_file = argv[2];
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // INITIALIZE CELL LIST WITH PARTICLE DATA
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // initialize (or import) particle data for simulation
     struct Cell cell_list[CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z];
     memset(cell_list, -1, sizeof(struct Cell)*CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z);
-    //initialize_cell_list(cell_list);
-    cell_list[0].particle_list[0].particle_id = 0;
-    cell_list[0].particle_list[0].x = 0;
-    cell_list[0].particle_list[0].y = 0;
-    cell_list[0].particle_list[0].z = 0;
-    cell_list[0].particle_list[0].vx = 0;
-    cell_list[0].particle_list[0].vy = 0;
-    cell_list[0].particle_list[0].vz = 0;
 
-    cell_list[0].particle_list[1].particle_id = 1;
-    cell_list[0].particle_list[1].x = 1;
-    cell_list[0].particle_list[1].y = 1;
-    cell_list[0].particle_list[1].z = 1;
-    cell_list[0].particle_list[1].vx = 0;
-    cell_list[0].particle_list[1].vy = 0;
-    cell_list[0].particle_list[1].vz = 0;
+
     // device_cell_list stores an array of Cells, where each Cell contains a particle_list
     struct Cell *device_cell_list1;
     struct Cell *device_cell_list2;
+
+    // import particles from PDB file
+    int particle_count;
+    struct Particle *particle_list;
+    import_atoms(input_file, &particle_list, &particle_count);
+    create_cell_list(particle_list, particle_count, cell_list, CELL_CUTOFF_RADIUS_ANGST);
     // cudaMalloc initializes GPU global memory to be used as parameter for GPU kernel
     GPU_PERROR(cudaMalloc(&device_cell_list1, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell)));
     GPU_PERROR(cudaMalloc(&device_cell_list2, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell)));
@@ -364,6 +364,9 @@ int main()
     } else {
         GPU_PERROR(cudaMemcpy(cell_list, device_cell_list2, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyDeviceToHost));
     }
+
+    FILE *out = fopen(output_file, "w");
+
     GPU_PERROR(cudaFree(device_cell_list1));
     GPU_PERROR(cudaFree(device_cell_list2));
 

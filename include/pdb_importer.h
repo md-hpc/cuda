@@ -20,7 +20,7 @@
 #endif
 
 #ifndef TIMESTEP_DURATION_FS
-#define TIMESTEP_DURATION_FS 1                            
+#define TIMESTEP_DURATION_FS 1e-15                            
 #endif
 
 
