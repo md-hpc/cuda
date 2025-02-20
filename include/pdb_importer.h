@@ -23,6 +23,7 @@
 #define TIMESTEP_DURATION_FS 1                            
 #endif
 
+
 struct Particle {
     int particle_id;
     float x;

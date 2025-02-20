@@ -1,11 +1,17 @@
-CC = gcc
-CFLAGS = -I./include
+CXX = nvcc
 
-TESTS_DIR = tests
 SRC_DIR = src
+INCLUDE_DIR = include
+TESTS_DIR = tests
 BUILD_DIR = build
 
 CCC = nvcc
+
+CXXFLAGS = .I/$(INCLUDE_DIR)
+
+SRCS = $(wildcard $(SRC_DIR)/*.cpp) $(wildcard $(SRC_DIR)/*.cu)
+
+OBJS = $(patsubst $(SRC_DIR)/%.cpp, $(BUILD_DIR)/%.o, $(SRCS)) $(patsubst $(SRC_DIR)/%.cu, $(BUILD_DIR)/%.o, $(SRCS))
 
 .PHONY: tests run_tests clean
 

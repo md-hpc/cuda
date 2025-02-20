@@ -6,11 +6,12 @@ extern "C" {
 #include <stdio.h>
 #include <stdlib.h>
 #include <curand.h>
+#include <assert.h>
 
 #define MAX_PARTICLES_PER_BLOCK 1024
 #define CELL_CUTOFF_RADIUS_ANGST 100
-#define EPSILON 1
-#define SIGMA 1
+#define EPSILON 1.65e-21
+#define SIGMA 0.34f
 #define LJMIN (-4.0f * 24.0f * EPSILON / SIGMA * (powf(7.0f / 26.0f, 7.0f / 6.0f) - 2.0f * powf(7.0f / 26.0f, 13.0f / 6.0f)))
 #define GPU_PERROR(err) do {\
     if (err != cudaSuccess) {\
@@ -22,7 +23,7 @@ extern "C" {
 
 __device__ float compute_acceleration(float r1, float r2) {
     float r = fabsf(r1 - r2);
-    float force = 4 * EPSILON * (6 * powf(SIGMA, 6.0f) / powf(r, 7.0f) - 12 * powf(SIGMA, 12.0f) / powf(r, 13.0f));
+    float force = 4 * EPSILON * (12 * powf(SIGMA, 12.0f) / powf(r, 13.0f) - 6 * powf(SIGMA, 6.0f) / powf(r, 7.0f));
 
     return (force < LJMIN) * LJMIN + !(force < LJMIN) * force;
 }
@@ -41,13 +42,14 @@ __global__ void timestep(struct Particle *src_particle_list, struct Particle *ds
     float az = 0;
 
     // accumulate accelerations for every other particle
-    for (int i = 1; i < particle_count; ++i) {
+    for (int i = 1; i < 2; ++i) {//i < particle_count; ++i) {
         struct Particle neighbor_particle = src_particle_list[(reference_particle_idx + i) % particle_count];
         ax += compute_acceleration(reference_particle.x, neighbor_particle.x);
         ay += compute_acceleration(reference_particle.y, neighbor_particle.y);
         az += compute_acceleration(reference_particle.z, neighbor_particle.z);
     }
 
+/*
     // calculate velocity for reference particle
     reference_particle.vx += ax * TIMESTEP_DURATION;
     reference_particle.vy += ay * TIMESTEP_DURATION;
@@ -55,16 +57,32 @@ __global__ void timestep(struct Particle *src_particle_list, struct Particle *ds
 
     // get new reference particle position taking into account periodic boundary conditions
     float x = reference_particle.x + reference_particle.vx * TIMESTEP_DURATION;
-    x += ((x < 0) - (x > CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST)) * (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST);
+    int is_out_of_bounds = ((x < 0) - (x > CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST));
+    while (is_out_of_bounds) {
+        x += is_out_of_bounds * (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST);
+        is_out_of_bounds = ((x < 0) - (x > CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST));
+    }
     reference_particle.x = x;
-
+ 
     float y = reference_particle.y + reference_particle.vy * TIMESTEP_DURATION;
-    y += ((y < 0) - (y > CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST)) * (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST);
+    is_out_of_bounds = ((y < 0) - (y > CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST));
+    while (is_out_of_bounds) {
+        y += is_out_of_bounds * (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST);
+        is_out_of_bounds = ((y < 0) - (y > CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST));
+    }
     reference_particle.y = y;
 
     float z = reference_particle.z + reference_particle.vz * TIMESTEP_DURATION;
-    z += ((z < 0) - (z > CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST)) * (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST);
+    is_out_of_bounds = ((z < 0) - (z > CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST));
+    while (is_out_of_bounds) {
+        z += is_out_of_bounds * (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST);
+        is_out_of_bounds = ((z < 0) - (z > CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST));
+    }
     reference_particle.z = z;
+*/
+    reference_particle.x = ax;
+    reference_particle.y = ay;
+    reference_particle.z = az;
 
     dst_particle_list[reference_particle_idx] = reference_particle;
 }
@@ -92,11 +110,51 @@ int main(int argc, char **argv)
     // set parameters
     dim3 numBlocks((particle_count - 1) / 1024 + 1);
     dim3 threadsPerBlock(MAX_PARTICLES_PER_BLOCK);
+    struct Particle *buff = (struct Particle *) malloc(particle_count * sizeof(struct Particle));
+            GPU_PERROR(cudaMemcpy(buff, device_particle_list_1, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
+            for (int i = 0; i < particle_count; ++i) {
+                printf("particle: %d %f, %f, %f\n", buff[i].particle_id, buff[i].x, buff[i].y, buff[i].z);
+                assert(buff[i].x != NAN);
+                assert(buff[i].y != NAN);
+                assert(buff[i].z != NAN);
+                assert(buff[i].x >= 0);
+                assert(buff[i].y >= 0);
+                assert(buff[i].z >= 0);
+                assert(buff[i].x <= 300);
+                assert(buff[i].y <= 300);
+                assert(buff[i].z <= 300);
+            }
     for (int t = 1l; t <= TIMESTEPS; ++t) {
-        if (t & 1) {
+        
+        if (t % 2 == 1) {
             timestep<<<numBlocks, threadsPerBlock>>>(device_particle_list_1, device_particle_list_2, particle_count);
+            GPU_PERROR(cudaMemcpy(buff, device_particle_list_2, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
+            for (int i = 0; i < particle_count; ++i) {
+                printf("particle: %d %f, %f, %f\n", buff[i].particle_id, buff[i].x, buff[i].y, buff[i].z);
+                assert(buff[i].x != NAN);
+                assert(buff[i].y != NAN);
+                assert(buff[i].z != NAN);
+                assert(buff[i].x >= 0);
+                assert(buff[i].y >= 0);
+                assert(buff[i].z >= 0);
+                assert(buff[i].x <= 300);
+                assert(buff[i].y <= 300);
+                assert(buff[i].z <= 300);
+            }
         } else {
             timestep<<<numBlocks, threadsPerBlock>>>(device_particle_list_2, device_particle_list_1, particle_count);
+            GPU_PERROR(cudaMemcpy(buff, device_particle_list_1, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
+            for (int i = 0; i < particle_count; ++i) {
+                assert(buff[i].x != NAN);
+                assert(buff[i].y != NAN);
+                assert(buff[i].z != NAN);
+                assert(buff[i].x >= 0);
+                assert(buff[i].y >= 0);
+                assert(buff[i].z >= 0);
+                assert(buff[i].x <= 300);
+                assert(buff[i].y <= 300);
+                assert(buff[i].z <= 300);
+            }
         }
     }
 
