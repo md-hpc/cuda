@@ -66,3 +66,17 @@ void create_cell_list(struct Particle *particle_list, int particle_count,
         cell_list[cell_idx].particle_list[free_idx[cell_idx]++] = particle_list[i];
     }
 }
+
+void cell_list_to_csv(struct Cell *cell_list, int num_cells, char *filename)
+{
+    FILE *file = fopen(filename, "w");
+    fprintf(file, "particle_id,x,y,z\n");
+
+    for (int i = 0; i < num_cells; ++i) {
+        for (int j = 0; j < MAX_PARTICLES_PER_CELL; ++j) {
+            fprintf(file, "%d,%f,%f,%f\n", cell_list[i].particle_list[j].particle_id, cell_list[i].particle_list[j].x, cell_list[i].particle_list[j].y, cell_list[i].particle_list[j].z);
+        }
+    }
+
+    fclose(file);
+}
