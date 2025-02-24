@@ -67,6 +67,6 @@ int import_atoms(char *filename, struct Particle **particle_list, int *particle_
 void create_cell_list(struct Particle *particle_list, int particle_count,
                       struct Cell *cell_list, int cell_cutoff_radius);
 
-void cell_list_to_csv(struct Cell *cell_list, int num_cells, char *filename)
+void cell_list_to_csv(struct Cell *cell_list, int num_cells, char *filename);
 
 #endif /* PDB_IMPORTER_H */
