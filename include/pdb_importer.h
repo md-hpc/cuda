@@ -4,15 +4,15 @@
 #define MAX_PARTICLES_PER_CELL 128
 
 #ifndef CELL_LENGTH_X
-#define CELL_LENGTH_X 3
+#define CELL_LENGTH_X 10
 #endif
 
 #ifndef CELL_LENGTH_Y
-#define CELL_LENGTH_Y 3
+#define CELL_LENGTH_Y 10
 #endif
 
 #ifndef CELL_LENGTH_Z
-#define CELL_LENGTH_Z 3
+#define CELL_LENGTH_Z 10
 #endif
 
 #ifndef TIMESTEPS

@@ -8,6 +8,10 @@
 # specify version of CUDA to be used
 module load cuda/11.3
 
+particle_count="$1"
+
 nvcc -I./include -D TIMESTEPS=1 -D TIMESTEP_DURATION_FS=1e-15 src/pdb_importer.c src/nsquared.cu -o build/nsquared 
-time build/nsquared tests/example_input.pdb tests/ts-1_tsd-1e-15_output.csv > ts-1_tsd-1e-15-output.txt
+touch output/ts-1_tsd-1e-15_n-${particle_count}_output.txt
+{ time build/nsquared tests/random_particles-${particle_count}.pdb output/ts-1_tsd-1e-15_n-${particle_count}_output.csv > output/ts-1_tsd-1e-15_n-${particle_count}_output.txt; }
+
 
