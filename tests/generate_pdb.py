@@ -31,20 +31,20 @@ def generate_pdb(filename, num_particles, num_cells_x, num_cells_y, num_cells_z,
                     atom_line = f"ATOM  {len(positions):5d}  X   XXX A   1    {x:8.3f}{y:8.3f}{z:8.3f}  1.00  0.00           X  \n"
                     f.write(atom_line)
         f.write("END\n")
-    print(f"PDB file '{filename}' created with {num_particles} particles in a {box_size} Angstrom^3 box.")
+    print(f"PDB file '{filename}' created with {num_particles} particles in a universe with {num_cells_x}x{num_cells_y}x{num_cells_z} cells with a cell size of {cell_cutoff_radius} Angstroms.")
 
 def main():
     parser = argparse.ArgumentParser(description="generate PDB file with unique particles in random positions")
     parser.add_argument("-o", "--output", type=str, required=True, help="output PDB filename")
     parser.add_argument("-n", "--num_particles", type=int, required=True, help="number of particles")
-    parser.add_argument("-x", "--cell_length_x", type=int, required=True, help="cell length in the x dimension in Angstroms")
-    parser.add_argument("-y", "--cell_length_y", type=int, required=True, help="cell length in the y dimension in Angstroms")
-    parser.add_argument("-z", "--cell_length_z", type=int, required=True, help="cell length in the z dimension in Angstroms")
+    parser.add_argument("-x", "--num_cells_x", type=int, required=True, help="number of cells in x dimension")
+    parser.add_argument("-y", "--num_cells_y", type=int, required=True, help="number of cells in y dimension")
+    parser.add_argument("-z", "--num_cells_z", type=int, required=True, help="number of cells in z dimension")
     parser.add_argument("-c", "--cell_cutoff_radius", type=int, required=True, help="size of cube defined by one dimension in Angstroms")
     
 
     args = parser.parse_args()
-    generate_pdb(args.output, args.num_particles, args.box_size, args.cell_cutoff_radius)
+    generate_pdb(args.output, args.num_particles, args.num_cells_x, args.num_cells_y, args.num_cells_z, args.cell_cutoff_radius)
 
 
 if __name__ == '__main__':
