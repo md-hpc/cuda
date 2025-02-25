@@ -11,7 +11,6 @@ extern "C" {
 // so worst case, each block will have max 4K shared memory
 
 // use profiler to identify optimal size ie. CUDA occupancy API, nvvp
-#define NUM_PARTICLES 3
 #define MAX_PARTICLES_PER_CELL 128
 
 #define CELL_CUTOFF_RADIUS_ANGST 100
@@ -19,9 +18,9 @@ extern "C" {
 #define CELL_LENGTH_Y 3
 #define CELL_LENGTH_Z 3
 
-#define TIMESTEPS 1
-#define EPSILON 1.0f
-#define SIGMA 1.0f
+#define ARGON_MASS (39.948 * 1.66054e-27)
+#define EPSILON (1.65e-21)
+#define SIGMA (0.34f)
 #define LJMIN (-4.0f * 24.0f * EPSILON / SIGMA * (powf(7.0f / 26.0f, 7.0f / 6.0f) - 2.0f * powf(7.0f / 26.0f, 13.0f / 6.0f)))
 
 #define PLUS_1(dimension, length) ((dimension != length - 1) * (dimension + 1))
@@ -35,7 +34,7 @@ extern "C" {
 
 // LJ force computation
 __device__ float compute_acceleration(float r) {
-    float force = 4 * EPSILON * (12 * powf(SIGMA, 12.0f) / powf(r, 13.0f) - 6 * powf(SIGMA, 6.0f) / powf(r, 7.0f));
+    float force = 4 * EPSILON * (12 * powf(SIGMA, 12.0f) / powf(r, 13.0f) - 6 * powf(SIGMA, 6.0f) / powf(r, 7.0f)) / ARGON_MASS;
 
     return (force < LJMIN) * LJMIN + !(force < LJMIN) * force;
 }
@@ -280,8 +279,8 @@ int main(int argc, char **argv)
         - (particle_id * 3) + 2 gives index of y
     */
     float *accelerations;
-    GPU_PERROR(cudaMalloc(&accelerations, NUM_PARTICLES * 3 * sizeof(float)));
-    GPU_PERROR(cudaMemset(accelerations, 0, NUM_PARTICLES * 3 * sizeof(float)));
+    GPU_PERROR(cudaMalloc(&accelerations, particle_count * 3 * sizeof(float)));
+    GPU_PERROR(cudaMemset(accelerations, 0, particle_count * 3 * sizeof(float)));
 
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -337,6 +336,7 @@ int main(int argc, char **argv)
     }
 
     FILE *out = fopen(output_file, "w");
+    fprintf(out, "cell_idx,particle_id,x,y,z\n");
 
     GPU_PERROR(cudaFree(device_cell_list1));
     GPU_PERROR(cudaFree(device_cell_list2));
@@ -346,7 +346,7 @@ int main(int argc, char **argv)
             for (int z = 0; z < CELL_LENGTH_Z; ++z) {
                 int count = 0;
                 while (cell_list[x + y * CELL_LENGTH_X + z * CELL_LENGTH_X * CELL_LENGTH_Y].particle_list[count].particle_id != -1) {
-                    printf("%d: (%f, %f, %f)\n", cell_list[x + y * CELL_LENGTH_X + z * CELL_LENGTH_X * CELL_LENGTH_Y].particle_list[count].particle_id, cell_list[x + y * CELL_LENGTH_X + z * CELL_LENGTH_X * CELL_LENGTH_Y].particle_list[count].x , cell_list[x + y * CELL_LENGTH_X + z * CELL_LENGTH_X * CELL_LENGTH_Y].particle_list[count].y, cell_list[x + y * CELL_LENGTH_X + z * CELL_LENGTH_X * CELL_LENGTH_Y].particle_list[count].z);
+                    fprintf(out, "%d,%d,%f,%f,%f\n", x + y * CELL_LENGTH_X + z * CELL_LENGTH_X * CELL_LENGTH_Y, cell_list[x + y * CELL_LENGTH_X + z * CELL_LENGTH_X * CELL_LENGTH_Y].particle_list[count].particle_id, cell_list[x + y * CELL_LENGTH_X + z * CELL_LENGTH_X * CELL_LENGTH_Y].particle_list[count].x , cell_list[x + y * CELL_LENGTH_X + z * CELL_LENGTH_X * CELL_LENGTH_Y].particle_list[count].y, cell_list[x + y * CELL_LENGTH_X + z * CELL_LENGTH_X * CELL_LENGTH_Y].particle_list[count].z);
                     count++;
                 }
             }
