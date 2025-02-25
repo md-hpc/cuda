@@ -43,24 +43,46 @@ __global__ void timestep(struct Particle *src_particle_list, struct Particle *ds
     float ay = 0;
     float az = 0;
 
-    // accumulate accelerations for every other particle
-    for (int i = 1; i < particle_count; ++i) {
-        if (i % MAX_PARTICLES_PER_BLOCK == 1) {
-            shared_particles[threadIdx.x] = src_particle_list[(reference_particle_idx + i)];
+    int i;
+    for (i = 0; i < particle_count - MAX_PARTICLES_PER_BLOCK; i += MAX_PARTICLES_PER_BLOCK) {
+        shared_particles[threadIdx.x] = src_particle_list[i + threadIdx.x];
+
+        for (int j = 1; j < MAX_PARTICLES_PER_BLOCK; ++j) {
+            struct Particle neighbor_particle = shared_particles[(threadIdx.x + j) % MAX_PARTICLES_PER_BLOCK];
+
+            float norm = sqrt(
+                pow(reference_particle.x - neighbor_particle.x, 2) +
+                pow(reference_particle.y - neighbor_particle.y, 2) +
+                pow(reference_particle.z - neighbor_particle.z, 2)
+            );
+            
+            float acceleration = compute_acceleration(norm);
+            ax += acceleration * reference_particle.x / norm;
+            ay += acceleration * reference_particle.y / norm;
+            az += acceleration * reference_particle.z / norm;
         }
+    }
 
-        struct Particle neighbor_particle = src_particle_list[(reference_particle_idx + i) % particle_count];
+    int remaining_particles = particle_count - i;
 
-	float norm = sqrt(
-	    pow(reference_particle.x - neighbor_particle.x, 2) +
-	    pow(reference_particle.y - neighbor_particle.y, 2) +
-	    pow(reference_particle.z - neighbor_particle.z, 2)
+    if (threadIdx.x > remaining_particles)
+        return;
+
+    shared_particles[threadIdx.x] = src_particle_list[i + threadIdx.x];
+
+    for (i = 0; i < remaining_particles; ++i) {
+        struct Particle neighbor_particle = shared_particles[(threadIdx.x + i) % remaining_particles];
+
+        float norm = sqrt(
+            pow(reference_particle.x - neighbor_particle.x, 2) +
+            pow(reference_particle.y - neighbor_particle.y, 2) +
+            pow(reference_particle.z - neighbor_particle.z, 2)
         );
-	
-	float acceleration = compute_acceleration(norm);
-	ax += acceleration * reference_particle.x / norm;
-	ay += acceleration * reference_particle.y / norm;
-	az += acceleration * reference_particle.z / norm;
+
+        float acceleration = compute_acceleration(norm);
+        ax += acceleration * reference_particle.x / norm;
+        ay += acceleration * reference_particle.y / norm;
+        az += acceleration * reference_particle.z / norm;
     }
 
     // calculate velocity for reference particle
@@ -72,7 +94,7 @@ __global__ void timestep(struct Particle *src_particle_list, struct Particle *ds
     float x = reference_particle.x + reference_particle.vx * TIMESTEP_DURATION_FS;
     x += ((x < 0) - (x > CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST)) * (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST);
     reference_particle.x = x;
- 
+
     float y = reference_particle.y + reference_particle.vy * TIMESTEP_DURATION_FS;
     y += ((y < 0) - (y > CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST)) * (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST);
     reference_particle.y = y;
