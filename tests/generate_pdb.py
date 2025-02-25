@@ -4,16 +4,20 @@ from collections import defaultdict
 
 MAX_PARTICLES_PER_CELL = 128
 
-def generate_pdb(filename, num_particles, cell_length_x, cell_length_y, cell_length_z, cell_cutoff_radius):
+def generate_pdb(filename, num_particles, num_cells_x, num_cells_y, num_cells_z, cell_cutoff_radius):
     # need to check for unique positions
     positions = set() 
     cell_counts = defaultdict(int)
 
+    cell_length_x = num_cells_x * cell_cutoff_radius
+    cell_length_y = num_cells_y * cell_cutoff_radius
+    cell_length_z = num_cells_z * cell_cutoff_radius
+
     with open(filename, "w") as f:
         while len(positions) < num_particles:
-            x = round(random.uniform(0, cell_length_x), cell_cutoff_radius)
-            y = round(random.uniform(0, cell_length_y), cell_cutoff_radius)
-            z = round(random.uniform(0, cell_length_z), cell_cutoff_radius)
+            x = round(random.uniform(0, cell_length_x), 3)
+            y = round(random.uniform(0, cell_length_y), 3)
+            z = round(random.uniform(0, cell_length_z), 3)
             x_cell = int(x/cell_cutoff_radius)
             y_cell = int(y/cell_cutoff_radius)
             z_cell = int(z/cell_cutoff_radius)
