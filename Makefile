@@ -17,7 +17,7 @@ OBJS = $(patsubst $(SRC_DIR)/%.cpp, $(BUILD_DIR)/%.o, $(SRCS)) $(patsubst $(SRC_
 
 TESTS = test_pdb_importer #test_naive #test_cell_list
 
-SIMULATIONS = nsquared cell_list
+SIMULATIONS = nsquared nsquared_shared cell_list
 
 tests: $(TESTS)
 
@@ -44,6 +44,9 @@ test_pdb_importer: $(TESTS_DIR)/test_pdb_importer.c $(SRC_DIR)/pdb_importer.c | 
 #	$(CC) $(CFLAGS) $^ -o $@
 #
 nsquared: $(SRC_DIR)/pdb_importer.c $(SRC_DIR)/nsquared.cu | $(BUILD_DIR)
+	$(CCC) $(CXXFLAGS) -D TIMESTEPS=10 -D TIMESTEP_DURATION=1 $^ -o $(BUILD_DIR)/$@
+
+nsquared_shared: $(SRC_DIR)/pdb_importer.c $(SRC_DIR)/nsquared_shared.cu | $(BUILD_DIR)
 	$(CCC) $(CXXFLAGS) -D TIMESTEPS=10 -D TIMESTEP_DURATION=1 $^ -o $(BUILD_DIR)/$@
 
 cell_list: $(SRC_DIR)/pdb_importer.c $(SRC_DIR)/cell_list.cu | $(BUILD_DIR)
