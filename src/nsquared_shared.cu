@@ -48,11 +48,11 @@ __global__ void timestep(struct Particle *src_particle_list, struct Particle *ds
         shared_particles[threadIdx.x] = src_particle_list[i + threadIdx.x];
         __syncthreads();
 
-        if (reference_particle.particle_id == shared_particles[i].particle_id)
-            continue;
-
         for (int j = 0; j < MAX_PARTICLES_PER_BLOCK; ++j) {
             struct Particle neighbor_particle = shared_particles[(threadIdx.x + j) % MAX_PARTICLES_PER_BLOCK];
+
+            if (reference_particle.particle_id == neighbor_particle.particle_id)
+                continue;
 
             float norm = sqrtf(
                 powf(reference_particle.x - neighbor_particle.x, 2) +
@@ -78,7 +78,7 @@ __global__ void timestep(struct Particle *src_particle_list, struct Particle *ds
     for (i = 0; i < remaining_particles; ++i) {
         struct Particle neighbor_particle = shared_particles[i];
 
-        if (reference_particle.particle_id == shared_particles[i].particle_id)
+        if (reference_particle.particle_id == neighbor_particle.particle_id)
             continue;
 
         float norm = sqrtf(
