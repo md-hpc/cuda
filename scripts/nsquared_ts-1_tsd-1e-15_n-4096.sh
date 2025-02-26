@@ -4,7 +4,7 @@
 #$ -l gpus=1
 #$ -M eth@bu.edu
 #$ -M ajamias@bu.edu
-#$ -o output/ts-1_tsd-1e-15_n-4096_output.txt;
+#$ -o output/ts-1_tsd-1e-15_n-4096_output.txt
 
 
 # specify version of CUDA to be used
