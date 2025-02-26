@@ -46,14 +46,18 @@ __global__ void timestep(struct Particle *src_particle_list, struct Particle *ds
     int i;
     for (i = 0; i < particle_count - MAX_PARTICLES_PER_BLOCK; i += MAX_PARTICLES_PER_BLOCK) {
         shared_particles[threadIdx.x] = src_particle_list[i + threadIdx.x];
+        __syncthreads();
 
-        for (int j = 1; j < MAX_PARTICLES_PER_BLOCK; ++j) {
+        if (reference_particle.particle_id == shared_particles[i].particle_id)
+            continue;
+
+        for (int j = 0; j < MAX_PARTICLES_PER_BLOCK; ++j) {
             struct Particle neighbor_particle = shared_particles[(threadIdx.x + j) % MAX_PARTICLES_PER_BLOCK];
 
-            float norm = sqrt(
-                pow(reference_particle.x - neighbor_particle.x, 2) +
-                pow(reference_particle.y - neighbor_particle.y, 2) +
-                pow(reference_particle.z - neighbor_particle.z, 2)
+            float norm = sqrtf(
+                powf(reference_particle.x - neighbor_particle.x, 2) +
+                powf(reference_particle.y - neighbor_particle.y, 2) +
+                powf(reference_particle.z - neighbor_particle.z, 2)
             );
             
             float acceleration = compute_acceleration(norm);
@@ -65,18 +69,22 @@ __global__ void timestep(struct Particle *src_particle_list, struct Particle *ds
 
     int remaining_particles = particle_count - i;
 
-    if (threadIdx.x > remaining_particles)
-        return;
+    if (threadIdx.x < remaining_particles)
+        shared_particles[threadIdx.x] = src_particle_list[i + threadIdx.x];
 
-    shared_particles[threadIdx.x] = src_particle_list[i + threadIdx.x];
+    if (remaining_particles)
+        __syncthreads();
 
     for (i = 0; i < remaining_particles; ++i) {
-        struct Particle neighbor_particle = shared_particles[(threadIdx.x + i) % remaining_particles];
+        struct Particle neighbor_particle = shared_particles[i];
 
-        float norm = sqrt(
-            pow(reference_particle.x - neighbor_particle.x, 2) +
-            pow(reference_particle.y - neighbor_particle.y, 2) +
-            pow(reference_particle.z - neighbor_particle.z, 2)
+        if (reference_particle.particle_id == shared_particles[i].particle_id)
+            continue;
+
+        float norm = sqrtf(
+            powf(reference_particle.x - neighbor_particle.x, 2) +
+            powf(reference_particle.y - neighbor_particle.y, 2) +
+            powf(reference_particle.z - neighbor_particle.z, 2)
         );
 
         float acceleration = compute_acceleration(norm);

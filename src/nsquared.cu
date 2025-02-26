@@ -45,10 +45,10 @@ __global__ void timestep(struct Particle *src_particle_list, struct Particle *ds
     for (int i = 1; i < particle_count; ++i) {
         struct Particle neighbor_particle = src_particle_list[(reference_particle_idx + i) % particle_count];
 
-	float norm = sqrt(
-	    pow(reference_particle.x - neighbor_particle.x, 2) +
-	    pow(reference_particle.y - neighbor_particle.y, 2) +
-	    pow(reference_particle.z - neighbor_particle.z, 2)
+	float norm = sqrtf(
+	    powf(reference_particle.x - neighbor_particle.x, 2) +
+	    powf(reference_particle.y - neighbor_particle.y, 2) +
+	    powf(reference_particle.z - neighbor_particle.z, 2)
         );
 	
 	float acceleration = compute_acceleration(norm);
