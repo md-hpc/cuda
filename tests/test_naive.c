@@ -17,7 +17,7 @@ int main(int argc, char **argv)
         naive(particle_list, particle_count);
 
         // output data
-	FILE *file = fopen(argv[2], "r");
+	FILE *file = fopen(argv[2], "w");
         fprintf(file, "particle_id,x,y,z\n");
         for (int i = 0; i < particle_count; ++i) {
                 fprintf(file, "%d,%f,%f,%f\n", particle_list[i].particle_id, particle_list[i].x, particle_list[i].y, particle_list[i].z);

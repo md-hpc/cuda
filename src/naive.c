@@ -11,7 +11,7 @@
 
 
 float compute_acceleration(float r) {
-    float force = 4 * EPSILON * (12 * powf(SIGMA, 12.0f) / powf(r, 13.0f) - 6 * powf(SIGMA, 6.0f) / powf(r, 7.0f)) / ARGON_MASS;
+    float force = 4 * EPSILON * (12 * pow(SIGMA, 12.0f) / pow(r, 13.0f) - 6 * pow(SIGMA, 6.0f) / pow(r, 7.0f)) / ARGON_MASS;
 
     return (force < LJMIN) * LJMIN + !(force < LJMIN) * force;
 }
