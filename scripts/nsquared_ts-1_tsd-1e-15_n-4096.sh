@@ -4,16 +4,11 @@
 #$ -l gpus=1
 #$ -M eth@bu.edu
 #$ -M ajamias@bu.edu
-#$ -o output/ts-1_tsd-1e-15_n-4096_output.txt
-#$ -e output/ts-1_tsd-1e-15_n-4096_output_error.txt
-
-
-# specify version of CUDA to be used
+#$ -o output/nsquared/ts-1_tsd-1e-15_n-4096_output.txt
+#$ -e output/nsquared/ts-1_tsd-1e-15_n-4096_output_error.txt
+	
 module load cuda/11.3
 
-particle_count=4096
-
-nvcc -I./include -D TIMESTEPS=1 -D TIMESTEP_DURATION_FS=1e-15 src/pdb_importer.c src/nsquared.cu -o build/nsquared 
-time build/nsquared input/random_particles-${particle_count}.pdb output/ts-1_tsd-1e-15_n-${particle_count}_output.csv
-
+nvcc -I./include -D TIMESTEPS=1 -D TIMESTEP_DURATION_FS=1e-15 src/pdb_importer.c src/nsquared.cu -o build/nsquared
+time build/nsquared input/random_particles-4096.pdb output/nsquared/ts-1_tsd-1e-15_n-4096_output.csv
 
