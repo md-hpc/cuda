@@ -4,18 +4,21 @@
 #include <string.h>
 #include <math.h>
 
-#define EPSILON (1.65e-9)                       // ng * m^2 / s^2
+//#define EPSILON (1.65e-9)                       // ng * m^2 / s^2
+#define EPSILON (1.65e11)                        // ng * A^2 / s^2
 #define ARGON_MASS (39.948 * 1.66054e-15)       // ng
-#define SIGMA (0.34f)                           // nm
+#define SIGMA (0.034f)                           // A
 #define LJMIN (-4.0f * 24.0f * EPSILON / SIGMA * (powf(7.0f / 26.0f, 7.0f / 6.0f) - 2.0f * powf(7.0f / 26.0f, 13.0f / 6.0f)))
 
 
 float compute_acceleration(float r_angstrom) {
+        // in A / s^2
         float temp = pow(SIGMA / r_angstrom, 6);
-        float force = 24 * EPSILON * (2 * temp * temp - temp) / (r_angstrom * ARGON_MASS);
+        float acceleration = 24 * EPSILON * (2 * temp * temp - temp) / (r_angstrom * ARGON_MASS);
         //float force = 4 * EPSILON * (12 * pow(SIGMA, 12.0f) / pow(r, 13.0f) - 6 * pow(SIGMA, 6.0f) / pow(r, 7.0f)) / ARGON_MASS;
 
-        return (force < LJMIN) * LJMIN + !(force < LJMIN) * force;
+        //return (force < LJMIN) * LJMIN + !(force < LJMIN) * force;
+        return acceleration;
 }
 
 void naive(struct Particle *particle_list, const int particle_count)
