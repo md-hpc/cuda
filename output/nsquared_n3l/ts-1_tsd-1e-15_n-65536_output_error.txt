@@ -1,0 +1,5 @@
+gpu_perror: an illegal memory access was encountered src/nsquared_n3l.cu 208
+
+real	0m1.483s
+user	0m0.106s
+sys	0m1.190s
