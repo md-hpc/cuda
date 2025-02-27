@@ -51,9 +51,11 @@ void naive(struct Particle *particle_list, const int particle_count)
                         }
                 }
 
+/*
                 for (int i = 0; i < 10; ++i) {
                         printf("accelerations: %.30f\t%.30f\t%.30f\n", accelerations[i][0] * TIMESTEP_DURATION_FS, accelerations[i][1] * TIMESTEP_DURATION_FS, accelerations[i][2] * TIMESTEP_DURATION_FS);
                 }
+*/
 
                 // motion update
                 for (int i = 0; i < particle_count; ++i) {

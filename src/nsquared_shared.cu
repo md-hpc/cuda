@@ -10,9 +10,10 @@ extern "C" {
 
 #define MAX_PARTICLES_PER_BLOCK 1024
 #define CELL_CUTOFF_RADIUS_ANGST 100
-#define EPSILON (1.65e-21)
-#define ARGON_MASS (39.948 * 1.66054e-27)
-#define SIGMA 0.34f
+//#define EPSILON (1.65e-9)                       // ng * m^2 / s^2
+#define EPSILON (1.65e11)                        // ng * A^2 / s^2
+#define ARGON_MASS (39.948 * 1.66054e-15)       // ng
+#define SIGMA (0.034f)                           // A
 #define LJMIN (-4.0f * 24.0f * EPSILON / SIGMA * (powf(7.0f / 26.0f, 7.0f / 6.0f) - 2.0f * powf(7.0f / 26.0f, 13.0f / 6.0f)))
 #define GPU_PERROR(err) do {\
     if (err != cudaSuccess) {\
@@ -22,10 +23,14 @@ extern "C" {
 } while (0);
 
 
-__device__ float compute_acceleration(float r) {
-    float force = 4 * EPSILON * (12 * powf(SIGMA, 12.0f) / powf(r, 13.0f) - 6 * powf(SIGMA, 6.0f) / powf(r, 7.0f)) / ARGON_MASS;
+__device__ float compute_acceleration(float r_angstrom) {
+        // in A / s^2
+        float temp = powf(SIGMA / r_angstrom, 6);
+        float acceleration = 24 * EPSILON * (2 * temp * temp - temp) / (r_angstrom * ARGON_MASS);
+        //float force = 4 * EPSILON * (12 * pow(SIGMA, 12.0f) / pow(r, 13.0f) - 6 * pow(SIGMA, 6.0f) / pow(r, 7.0f)) / ARGON_MASS;
 
-    return (force < LJMIN) * LJMIN + !(force < LJMIN) * force;
+        //return (force < LJMIN) * LJMIN + !(force < LJMIN) * force;
+        return acceleration;
 }
 
 __global__ void timestep(struct Particle *src_particle_list, struct Particle *dst_particle_list, int particle_count)
@@ -100,15 +105,15 @@ __global__ void timestep(struct Particle *src_particle_list, struct Particle *ds
 
     // get new reference particle position taking into account periodic boundary conditions
     float x = reference_particle.x + reference_particle.vx * TIMESTEP_DURATION_FS;
-    x += ((x < 0) - (x > CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST)) * (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST);
+    x += ((x < 0) - (x > UNIVERSE_LENGTH)) * UNIVERSE_LENGTH;
     reference_particle.x = x;
 
     float y = reference_particle.y + reference_particle.vy * TIMESTEP_DURATION_FS;
-    y += ((y < 0) - (y > CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST)) * (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST);
+    y += ((y < 0) - (y > UNIVERSE_LENGTH)) * UNIVERSE_LENGTH;
     reference_particle.y = y;
 
     float z = reference_particle.z + reference_particle.vz * TIMESTEP_DURATION_FS;
-    z += ((z < 0) - (z > CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST)) * (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST);
+    z += ((z < 0) - (z > UNIVERSE_LENGTH)) * UNIVERSE_LENGTH;
     reference_particle.z = z;
 
     dst_particle_list[reference_particle_idx] = reference_particle;
