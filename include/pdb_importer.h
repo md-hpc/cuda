@@ -19,6 +19,10 @@
 #define TIMESTEPS 1
 #endif
 
+#ifndef UNIVERSE_LENGTH
+#define UNIVERSE_LENGTH 10
+#endif
+
 #ifndef TIMESTEP_DURATION_FS
 #define TIMESTEP_DURATION_FS 1e-15                            
 #endif
