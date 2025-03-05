@@ -65,6 +65,10 @@ void create_cell_list(struct Particle *particle_list, int particle_count,
 
         cell_list[cell_idx].particle_list[free_idx[cell_idx]++] = particle_list[i];
     }
+
+    for (int i = 0; i < CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z; ++i) {
+        memset(&cell_list[i].particle_list[free_idx[i]], -1, (MAX_PARTICLES_PER_CELL - free_idx[i]) * sizeof(struct Particle));
+    }
 }
 
 void cell_list_to_csv(struct Cell *cell_list, int num_cells, char *filename)
@@ -73,8 +77,15 @@ void cell_list_to_csv(struct Cell *cell_list, int num_cells, char *filename)
     fprintf(file, "particle_id,x,y,z\n");
 
     for (int i = 0; i < num_cells; ++i) {
-        for (int j = 0; j < MAX_PARTICLES_PER_CELL; ++j) {
-            fprintf(file, "%d,%f,%f,%f\n", cell_list[i].particle_list[j].particle_id, cell_list[i].particle_list[j].x, cell_list[i].particle_list[j].y, cell_list[i].particle_list[j].z);
+        int count = 0;
+        struct Cell current_cell = cell_list[i];
+        while (current_cell.particle_list[count].particle_id != -1) {
+            fprintf(out, "%d,%d,%f,%f,%f\n", i,
+                                             current_cell.particle_list[count].particle_id,
+                                             current_cell.particle_list[count].x,
+                                             current_cell.particle_list[count].y,
+                                             current_cell.particle_list[count].z);
+            count++;
         }
     }
 
