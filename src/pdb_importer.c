@@ -80,7 +80,7 @@ void cell_list_to_csv(struct Cell *cell_list, int num_cells, char *filename)
         int count = 0;
         struct Cell current_cell = cell_list[i];
         while (current_cell.particle_list[count].particle_id != -1) {
-            fprintf(out, "%d,%d,%f,%f,%f\n", i,
+            fprintf(file, "%d,%d,%f,%f,%f\n", i,
                                              current_cell.particle_list[count].particle_id,
                                              current_cell.particle_list[count].x,
                                              current_cell.particle_list[count].y,

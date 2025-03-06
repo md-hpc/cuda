@@ -9,6 +9,8 @@ extern "C" {
 #define EPSILON (1.65e11)                        // ng * A^2 / s^2
 #define ARGON_MASS (39.948 * 1.66054e-15)       // ng
 #define SIGMA (0.034f)                           // A
+#define PLUS_1(dimension, length) ((dimension != length - 1) * (dimension + 1))
+#define MINUS_1(dimension, length) ((dimension == 0) * length + dimension - 1)
 #define GPU_PERROR(err) do {\
     if (err != cudaSuccess) {\
         fprintf(stderr,"gpu_perror: %s %s %d\n", cudaGetErrorString(err), __FILE__, __LINE__);\
@@ -26,7 +28,7 @@ __device__ float compute_acceleration(float r_angstrom) {
         return acceleration;
 }
 
-__global__ force_eval(struct Cell *cell_list, float *accelerations)
+__global__ void force_eval(struct Cell *cell_list, float *accelerations)
 {
     int home_x = blockIdx.x % CELL_LENGTH_X;
     int home_y = (blockIdx.x / CELL_LENGTH_X) % CELL_LENGTH_Y;
@@ -142,7 +144,7 @@ __global__ force_eval(struct Cell *cell_list, float *accelerations)
     return;
 }
 
-__global__ particle_update(struct Cell *cell_list, float *accelerations)
+__global__ void particle_update(struct Cell *cell_list, float *accelerations)
 {
     struct Particle reference_particle = cell_list[blockIdx.x].particle_list[threadIdx.x];
     if (reference_particle.particle_id == -1)
@@ -224,7 +226,7 @@ int main(int argc, char **argv)
 
     int particle_count;
     struct Particle *particle_list;
-    struct Cell *cell_list;
+    struct Cell cell_list[CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z];
     struct Cell *device_cell_list1;
     struct Cell *device_cell_list2;
     float *accelerations;
@@ -234,7 +236,7 @@ int main(int argc, char **argv)
     GPU_PERROR(cudaMalloc(&device_cell_list1, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell)));
     GPU_PERROR(cudaMalloc(&device_cell_list2, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell)));
     GPU_PERROR(cudaMalloc(&accelerations, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * 27 * MAX_PARTICLES_PER_CELL * 3 * sizeof(float)));
-    GPU_PERROR(cudaMemcpy(device_cell_list_1, cell_list, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyHostToDevice));
+    GPU_PERROR(cudaMemcpy(device_cell_list1, cell_list, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyHostToDevice));
 
     dim3 numBlocksCalculate(CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z, 27);
     dim3 numBlocksUpdate(CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z);
