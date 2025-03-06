@@ -72,7 +72,7 @@ __global__ void calculate_accelerations(struct Particle *src_particle_list, int 
             ay += acceleration * (reference_particle.y - neighbor_particle.y) / norm;
             az += acceleration * (reference_particle.z - neighbor_particle.z) / norm;
 
-            if (reference_particle.x < neighbor_particle.x) {
+            if (reference_particle.particle_id < neighbor_particle.particle_id) {
                 accelerations[accelerations_block_idx + ((threadIdx.x + j) % MAX_PARTICLES_PER_BLOCK) * 3] -= acceleration * (reference_particle.x - neighbor_particle.x) / norm;
                 accelerations[accelerations_block_idx + ((threadIdx.x + j) % MAX_PARTICLES_PER_BLOCK) * 3 + 1] -= acceleration * (reference_particle.y - neighbor_particle.y) / norm;
                 accelerations[accelerations_block_idx + ((threadIdx.x + j) % MAX_PARTICLES_PER_BLOCK) * 3 + 2] -= acceleration * (reference_particle.z - neighbor_particle.z) / norm;
@@ -198,6 +198,9 @@ int main(int argc, char **argv)
     dim3 threadsPerBlock(MAX_PARTICLES_PER_BLOCK);
     struct Particle *buff = (struct Particle *) malloc(particle_count * sizeof(struct Particle));
 
+    struct timespec time_start;
+    struct timespec time_stop;
+    clock_gettime(CLOCK_REALTIME, &time_start);
     for (int t = 1l; t <= TIMESTEPS; ++t) {
         GPU_PERROR(cudaMemset(global_accelerations, 0, ((particle_count - 1) / 1024 + 1) * particle_count * sizeof(float) * 3));
         GPU_PERROR(cudaMemset(summed_accelerations, 0, particle_count * sizeof(float) * 3));
@@ -213,6 +216,17 @@ int main(int argc, char **argv)
             GPU_PERROR(cudaMemcpy(buff, device_particle_list_1, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
         }
     }
+    clock_gettime(CLOCK_REALTIME, &time_stop);
+
+    struct timespec temp;
+    temp.tv_sec = time_stop.tv_sec - time_start.tv_sec;
+    temp.tv_nsec = time_stop.tv_nsec - time_start.tv_nsec;
+    if (temp.tv_nsec < 0) {
+        temp.tv_sec = temp.tv_sec - 1;
+        temp.tv_nsec = temp.tv_nsec + 1000000000;
+    }
+
+    printf("nsquared_n3l,%f\n", ((double) temp.tv_sec) + (((double) temp.tv_nsec) * 1e-9));
 
     struct Particle *out_list = (struct Particle *) malloc(particle_count * sizeof(struct Particle));
     if (TIMESTEPS & 1) {

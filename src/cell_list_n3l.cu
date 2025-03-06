@@ -135,7 +135,7 @@ __global__ void force_eval(struct Cell *cell_list, float *accelerations)
             float neighbor_particle_y = neighbor_cell.particle_list[i].y;
             float neighbor_particle_z = neighbor_cell.particle_list[i].z;
 
-            if (neighbor_is_home && !(reference_particle_x < neighbor_particle_x))
+            if (neighbor_is_home && !(reference_particle_id < neighbor_cell.particle_list[i].particle_id))
                 continue;
 
             float norm = sqrt(
@@ -312,6 +312,9 @@ int main(int argc, char **argv)
     // if flag == 1, then pass in address + offset
     // flag = !flag;
 
+    struct timespec time_start;
+    struct timespec time_stop;
+    clock_gettime(CLOCK_REALTIME, &time_start);
     for (int t = 0; t < TIMESTEPS; ++t) {
         if (flag) {
             force_eval<<<numBlocksForce, threadsPerBlockForce>>>(device_cell_list1, accelerations);
@@ -324,6 +327,17 @@ int main(int argc, char **argv)
         }
         flag = !flag;
     }
+    clock_gettime(CLOCK_REALTIME, &time_stop);
+
+    struct timespec temp;
+    temp.tv_sec = time_stop.tv_sec - time_start.tv_sec;
+    temp.tv_nsec = time_stop.tv_nsec - time_start.tv_nsec;
+    if (temp.tv_nsec < 0) {
+        temp.tv_sec = temp.tv_sec - 1;
+        temp.tv_nsec = temp.tv_nsec + 1000000000;
+    }
+
+    printf("cell_list,%f\n", ((double) temp.tv_sec) + (((double) temp.tv_nsec) * 1e-9));
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //  COPY FINAL RESULT BACK TO HOST CPU

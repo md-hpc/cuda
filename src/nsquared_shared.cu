@@ -145,6 +145,9 @@ int main(int argc, char **argv)
     struct Particle *buff = (struct Particle *) malloc(particle_count * sizeof(struct Particle));
     GPU_PERROR(cudaMemcpy(buff, device_particle_list_1, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
 
+    struct timespec time_start;
+    struct timespec time_stop;
+    clock_gettime(CLOCK_REALTIME, &time_start);
     for (int t = 1l; t <= TIMESTEPS; ++t) {
         
         if (t % 2 == 1) {
@@ -155,6 +158,17 @@ int main(int argc, char **argv)
             GPU_PERROR(cudaMemcpy(buff, device_particle_list_1, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
         }
     }
+    clock_gettime(CLOCK_REALTIME, &time_stop);
+
+    struct timespec temp;
+    temp.tv_sec = time_stop.tv_sec - time_start.tv_sec;
+    temp.tv_nsec = time_stop.tv_nsec - time_start.tv_nsec;
+    if (temp.tv_nsec < 0) {
+        temp.tv_sec = temp.tv_sec - 1;
+        temp.tv_nsec = temp.tv_nsec + 1000000000;
+    }
+
+    printf("nsquared_shared,%f\n", ((double) temp.tv_sec) + (((double) temp.tv_nsec) * 1e-9));
 
     struct Particle *out_list = (struct Particle *) malloc(particle_count * sizeof(struct Particle));
     if (TIMESTEPS & 1) {
