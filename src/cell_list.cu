@@ -287,7 +287,7 @@ int main(int argc, char **argv)
             for (int z = 0; z < CELL_LENGTH_Z; ++z) {
                 int count = 0;
                 struct Cell current_cell = cell_list[x + y * CELL_LENGTH_X + z * CELL_LENGTH_X * CELL_LENGTH_Y];
-                while (current_cell.particle_list[count].particle_id != -1) {
+                while (count < MAX_PARTICLES_PER_CELL && current_cell.particle_list[count].particle_id != -1) {
                     fprintf(out, "%d,%d,%f,%f,%f\n", x + y * CELL_LENGTH_X + z * CELL_LENGTH_X * CELL_LENGTH_Y,
                                                      current_cell.particle_list[count].particle_id,
                                                      current_cell.particle_list[count].x,
