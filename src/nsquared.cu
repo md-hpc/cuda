@@ -105,7 +105,7 @@ int main(int argc, char **argv)
     GPU_PERROR(cudaMemcpy(device_particle_list_1, particle_list, particle_count * sizeof(struct Particle), cudaMemcpyHostToDevice));
 
     // set parameters
-    dim3 numBlocks((particle_count - 1) / 1024 + 1);
+    dim3 numBlocks((particle_count - 1) / MAX_PARTICLES_PER_BLOCK + 1);
     dim3 threadsPerBlock(MAX_PARTICLES_PER_BLOCK);
     struct Particle *buff = (struct Particle *) malloc(particle_count * sizeof(struct Particle));
     GPU_PERROR(cudaMemcpy(buff, device_particle_list_1, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));

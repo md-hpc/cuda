@@ -8,7 +8,7 @@ extern "C" {
 #include <curand.h>
 #include <assert.h>
 
-#define MAX_PARTICLES_PER_BLOCK 1024
+#define MAX_PARTICLES_PER_BLOCK 32
 #define CELL_CUTOFF_RADIUS_ANGST 100
 //#define EPSILON (1.65e-9)                       // ng * m^2 / s^2
 #define EPSILON (1.65e11)                        // ng * A^2 / s^2
@@ -187,14 +187,14 @@ int main(int argc, char **argv)
     float *summed_accelerations;
     import_atoms(input_file, &particle_list, &particle_count);
 
-    GPU_PERROR(cudaMalloc(&global_accelerations, ((particle_count - 1) / 1024 + 1) * particle_count * sizeof(float) * 3));
+    GPU_PERROR(cudaMalloc(&global_accelerations, ((particle_count - 1) / MAX_PARTICLES_PER_BLOCK + 1) * particle_count * sizeof(float) * 3));
     GPU_PERROR(cudaMalloc(&summed_accelerations, particle_count * sizeof(float) * 3));
     GPU_PERROR(cudaMalloc(&device_particle_list_1, particle_count * sizeof(struct Particle)));
     GPU_PERROR(cudaMalloc(&device_particle_list_2, particle_count * sizeof(struct Particle)));
     GPU_PERROR(cudaMemcpy(device_particle_list_1, particle_list, particle_count * sizeof(struct Particle), cudaMemcpyHostToDevice));
 
     // set parameters
-    dim3 numBlocks((particle_count - 1) / 1024 + 1);
+    dim3 numBlocks((particle_count - 1) / MAX_PARTICLES_PER_BLOCK + 1);
     dim3 threadsPerBlock(MAX_PARTICLES_PER_BLOCK);
     struct Particle *buff = (struct Particle *) malloc(particle_count * sizeof(struct Particle));
 
@@ -202,7 +202,7 @@ int main(int argc, char **argv)
     struct timespec time_stop;
     clock_gettime(CLOCK_REALTIME, &time_start);
     for (int t = 1l; t <= TIMESTEPS; ++t) {
-        GPU_PERROR(cudaMemset(global_accelerations, 0, ((particle_count - 1) / 1024 + 1) * particle_count * sizeof(float) * 3));
+        GPU_PERROR(cudaMemset(global_accelerations, 0, ((particle_count - 1) / MAX_PARTICLES_PER_BLOCK + 1) * particle_count * sizeof(float) * 3));
         GPU_PERROR(cudaMemset(summed_accelerations, 0, particle_count * sizeof(float) * 3));
         if (t % 2 == 1) {
             calculate_accelerations<<<numBlocks, threadsPerBlock>>>(device_particle_list_1, particle_count, global_accelerations);
