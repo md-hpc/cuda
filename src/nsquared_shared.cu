@@ -51,7 +51,7 @@ __global__ void timestep(struct Particle *src_particle_list, struct Particle *ds
     int i;
     for (i = 0; i < particle_count - MAX_PARTICLES_PER_BLOCK; i += MAX_PARTICLES_PER_BLOCK) {
         shared_particles[threadIdx.x] = src_particle_list[i + threadIdx.x];
-        __syncthreads();
+        //__syncthreads();
 
         for (int j = 0; j < MAX_PARTICLES_PER_BLOCK; ++j) {
             struct Particle neighbor_particle = shared_particles[(threadIdx.x + j) % MAX_PARTICLES_PER_BLOCK];
@@ -78,7 +78,7 @@ __global__ void timestep(struct Particle *src_particle_list, struct Particle *ds
         shared_particles[threadIdx.x] = src_particle_list[i + threadIdx.x];
 
     if (remaining_particles)
-        __syncthreads();
+        //__syncthreads();
 
     for (i = 0; i < remaining_particles; ++i) {
         struct Particle neighbor_particle = shared_particles[i];
