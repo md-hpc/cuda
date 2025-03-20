@@ -55,13 +55,28 @@ void create_cell_list(struct Particle *particle_list, int particle_count,
                       struct Cell *cell_list, int cell_cutoff_radius)
 {
     int free_idx[CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z] = {0};
+    int cell_idx;
 
     for (int i = 0; i < particle_count; ++i) {
         int x_cell = particle_list[i].x / cell_cutoff_radius;
         int y_cell = particle_list[i].y / cell_cutoff_radius;
         int z_cell = particle_list[i].z / cell_cutoff_radius;
+	if (x_cell >= 0 && x_cell < CELL_LENGTH_X && y_cell >= 0 && y_cell < CELL_LENGTH_Y && z_cell >= 0 && z_cell < CELL_LENGTH_Z) {
+		cell_idx = x_cell + y_cell * CELL_LENGTH_X + z_cell * CELL_LENGTH_X * CELL_LENGTH_Y;
+		if (cell_idx >= 0 && cell_idx < CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z) {
+			if (free_idx[cell_idx] < MAX_PARTICLES_PER_CELL) {
+				cell_list[cell_idx].particle_list[free_idx[cell_idx]++] = particle_list[i];
+			} else {
+				printf("Warning: Cell %d is full, particle %d cannot be added\n", cell_idx, i);
+										            }
+		} else {
+			printf("Error: Computed cell_idx %d is out of bounds\n", cell_idx);
+							    }
+	} else {
+		printf("Error: Particle %d is out of bounds: (%.2f, %.2f, %.2f)\n", i, particle_list[i].x, particle_list[i].y, particle_list[i].z);
+	}
 
-        int cell_idx = x_cell + y_cell * CELL_LENGTH_X + z_cell * CELL_LENGTH_X * CELL_LENGTH_Y;
+
 
         cell_list[cell_idx].particle_list[free_idx[cell_idx]++] = particle_list[i];
     }
