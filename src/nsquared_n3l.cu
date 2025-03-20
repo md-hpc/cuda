@@ -117,29 +117,6 @@ __global__ void calculate_accelerations(struct Particle *src_particle_list, int 
     accelerations[accelerations_block_idx + threadIdx.x * 3 + 2] = az;
 }
 
-__global__ void accumulate_accelerations(float *global_accelerations, float *summed_accelerations, int particle_count)
-{
-    int particle_idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (particle_idx >= particle_count)
-        return; 
-
-    float ax = 0;
-    float ay = 0;
-    float az = 0;
-
-    const int accelerations_block_size = particle_count * sizeof(float) * 3;
-
-    for (int i = 0; i < gridDim.x; ++i) {
-        ax += global_accelerations[particle_idx + accelerations_block_size * i];
-        ay += global_accelerations[particle_idx + accelerations_block_size * i + 1];
-        az += global_accelerations[particle_idx + accelerations_block_size * i + 2];
-    }
-
-    summed_accelerations[particle_idx * 3] = ax;
-    summed_accelerations[particle_idx * 3 + 1] = ay;
-    summed_accelerations[particle_idx * 3 + 2] = az;
-}
-
 __global__ void position_update(struct Particle *src_particle_list, struct Particle *dst_particle_list, int particle_count, float *accelerations)
 {
     int reference_particle_idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -148,10 +125,21 @@ __global__ void position_update(struct Particle *src_particle_list, struct Parti
 
     struct Particle reference_particle = src_particle_list[reference_particle_idx];
 
+    float ax = 0;
+    float ay = 0;
+    float az = 0;
+
+    const int accelerations_block_size = particle_count * sizeof(float) * 3;
+    for (int i = 0; i < gridDim.x; ++i) {
+        ax += accelerations[reference_particle_idx + accelerations_block_size * i];
+        ay += accelerations[reference_particle_idx + accelerations_block_size * i + 1];
+        az += accelerations[reference_particle_idx + accelerations_block_size * i + 2];
+    }
+
     // calculate velocity for reference particle
-    reference_particle.vx += accelerations[reference_particle_idx * 3] * TIMESTEP_DURATION_FS;
-    reference_particle.vy += accelerations[reference_particle_idx * 3 + 1] * TIMESTEP_DURATION_FS;
-    reference_particle.vz += accelerations[reference_particle_idx * 3 + 2] * TIMESTEP_DURATION_FS;
+    reference_particle.vx += ax * TIMESTEP_DURATION_FS;
+    reference_particle.vy += ay * TIMESTEP_DURATION_FS;
+    reference_particle.vz += az * TIMESTEP_DURATION_FS;
 
     // get new reference particle position taking into account periodic boundary conditions
     float x = reference_particle.x + reference_particle.vx * TIMESTEP_DURATION_FS;
@@ -183,12 +171,10 @@ int main(int argc, char **argv)
     struct Particle *particle_list;
     struct Particle *device_particle_list_1;
     struct Particle *device_particle_list_2;
-    float *global_accelerations;
-    float *summed_accelerations;
+    float *accelerations;
     import_atoms(input_file, &particle_list, &particle_count);
 
-    GPU_PERROR(cudaMalloc(&global_accelerations, ((particle_count - 1) / MAX_PARTICLES_PER_BLOCK + 1) * particle_count * sizeof(float) * 3));
-    GPU_PERROR(cudaMalloc(&summed_accelerations, particle_count * sizeof(float) * 3));
+    GPU_PERROR(cudaMalloc(&accelerations, ((particle_count - 1) / MAX_PARTICLES_PER_BLOCK + 1) * particle_count * sizeof(float) * 3));
     GPU_PERROR(cudaMalloc(&device_particle_list_1, particle_count * sizeof(struct Particle)));
     GPU_PERROR(cudaMalloc(&device_particle_list_2, particle_count * sizeof(struct Particle)));
     GPU_PERROR(cudaMemcpy(device_particle_list_1, particle_list, particle_count * sizeof(struct Particle), cudaMemcpyHostToDevice));
@@ -202,17 +188,14 @@ int main(int argc, char **argv)
     struct timespec time_stop;
     clock_gettime(CLOCK_REALTIME, &time_start);
     for (int t = 1l; t <= TIMESTEPS; ++t) {
-        GPU_PERROR(cudaMemset(global_accelerations, 0, ((particle_count - 1) / MAX_PARTICLES_PER_BLOCK + 1) * particle_count * sizeof(float) * 3));
-        GPU_PERROR(cudaMemset(summed_accelerations, 0, particle_count * sizeof(float) * 3));
+        GPU_PERROR(cudaMemset(accelerations, 0, ((particle_count - 1) / MAX_PARTICLES_PER_BLOCK + 1) * particle_count * sizeof(float) * 3));
         if (t % 2 == 1) {
             calculate_accelerations<<<numBlocks, threadsPerBlock>>>(device_particle_list_1, particle_count, global_accelerations);
-            accumulate_accelerations<<<numBlocks, threadsPerBlock>>>(global_accelerations, summed_accelerations, particle_count);
-            position_update<<<numBlocks, threadsPerBlock>>>(device_particle_list_1, device_particle_list_2, particle_count, summed_accelerations);
+            position_update<<<numBlocks, threadsPerBlock>>>(device_particle_list_1, device_particle_list_2, particle_count, accelerations);
             GPU_PERROR(cudaMemcpy(buff, device_particle_list_2, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
         } else {
             calculate_accelerations<<<numBlocks, threadsPerBlock>>>(device_particle_list_2, particle_count, global_accelerations);
-            accumulate_accelerations<<<numBlocks, threadsPerBlock>>>(global_accelerations, summed_accelerations, particle_count);
-            position_update<<<numBlocks, threadsPerBlock>>>(device_particle_list_2, device_particle_list_1, particle_count, summed_accelerations);
+            position_update<<<numBlocks, threadsPerBlock>>>(device_particle_list_2, device_particle_list_1, particle_count, accelerations);
             GPU_PERROR(cudaMemcpy(buff, device_particle_list_1, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
         }
     }
