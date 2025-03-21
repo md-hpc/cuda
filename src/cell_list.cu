@@ -242,22 +242,56 @@ int main(int argc, char **argv)
     dim3 numBlocksUpdate(CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z);
     dim3 threadsPerBlock(MAX_PARTICLES_PER_CELL);
 
-    int t;
+#ifdef SIMULATE
+    FILE *out = fopen(output_file, "w");
+    fprintf(out, "particle_id,x,y,z\n");
+#endif
+
+#ifdef TIME_RUN
     struct timespec time_start;
     struct timespec time_stop;
     clock_gettime(CLOCK_REALTIME, &time_start);
+#endif
+
+    int t;
     for (t = 0; t < TIMESTEPS; ++t) {
         GPU_PERROR(cudaMemset(accelerations, 0, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * 27 * MAX_PARTICLES_PER_CELL * 3 * sizeof(float)));
         if (t & 1 == 0) {
             force_eval<<<numBlocksCalculate, threadsPerBlock>>>(device_cell_list1, accelerations);
             particle_update<<<numBlocksUpdate, threadsPerBlock>>>(device_cell_list1, accelerations);
             motion_update<<<numBlocksUpdate, threadsPerBlock>>>(device_cell_list1, device_cell_list2);
+#ifdef SIMULATE
+            GPU_PERROR(cudaMemcpy(cell_list, device_cell_list_2, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
+#endif
         } else {
             force_eval<<<numBlocksCalculate, threadsPerBlock>>>(device_cell_list2, accelerations);
             particle_update<<<numBlocksUpdate, threadsPerBlock>>>(device_cell_list2, accelerations);
             motion_update<<<numBlocksUpdate, threadsPerBlock>>>(device_cell_list2, device_cell_list1);
+#ifdef SIMULATE
+            GPU_PERROR(cudaMemcpy(cell_list, device_cell_list_1, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
+#endif
         }
+#ifdef SIMULATE
+        for (int x = 0; x < CELL_LENGTH_X; ++x) {
+            for (int y = 0; y < CELL_LENGTH_Y; ++y) {
+                for (int z = 0; z < CELL_LENGTH_Z; ++z) {
+                    int count = 0;
+                    struct Cell current_cell = cell_list[x + y * CELL_LENGTH_X + z * CELL_LENGTH_X * CELL_LENGTH_Y];
+                    while (count < MAX_PARTICLES_PER_CELL && current_cell.particle_list[count].particle_id != -1) {
+                        fprintf(out, "%d,%d,%f,%f,%f\n", x + y * CELL_LENGTH_X + z * CELL_LENGTH_X * CELL_LENGTH_Y,
+                                                        current_cell.particle_list[count].particle_id,
+                                                        current_cell.particle_list[count].x,
+                                                        current_cell.particle_list[count].y,
+                                                        current_cell.particle_list[count].z);
+                        count++;
+                    }
+                }
+            }
+        }
+#endif
     }
+
+#ifdef TIME_RUN
     clock_gettime(CLOCK_REALTIME, &time_stop);
 
     struct timespec temp;
@@ -279,9 +313,6 @@ int main(int argc, char **argv)
     FILE *out = fopen(argv[2], "w");
     fprintf(out, "cell_idx,particle_id,x,y,z\n");
 
-    GPU_PERROR(cudaFree(device_cell_list1));
-    GPU_PERROR(cudaFree(device_cell_list2));
-
     for (int x = 0; x < CELL_LENGTH_X; ++x) {
         for (int y = 0; y < CELL_LENGTH_Y; ++y) {
             for (int z = 0; z < CELL_LENGTH_Z; ++z) {
@@ -298,4 +329,8 @@ int main(int argc, char **argv)
             }
         }
     }
+#endif
+
+    GPU_PERROR(cudaFree(device_cell_list1));
+    GPU_PERROR(cudaFree(device_cell_list2));
 }

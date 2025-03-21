@@ -184,21 +184,40 @@ int main(int argc, char **argv)
     dim3 threadsPerBlock(MAX_PARTICLES_PER_BLOCK);
     struct Particle *buff = (struct Particle *) malloc(particle_count * sizeof(struct Particle));
 
+#ifdef SIMULATE
+    FILE *out = fopen(output_file, "w");
+    fprintf(out, "particle_id,x,y,z\n");
+#endif
+
+#ifdef TIME_RUN
     struct timespec time_start;
     struct timespec time_stop;
     clock_gettime(CLOCK_REALTIME, &time_start);
+#endif
+
     for (int t = 1l; t <= TIMESTEPS; ++t) {
         GPU_PERROR(cudaMemset(accelerations, 0, ((particle_count - 1) / MAX_PARTICLES_PER_BLOCK + 1) * particle_count * sizeof(float) * 3));
         if (t % 2 == 1) {
             calculate_accelerations<<<numBlocks, threadsPerBlock>>>(device_particle_list_1, particle_count, accelerations);
             position_update<<<numBlocks, threadsPerBlock>>>(device_particle_list_1, device_particle_list_2, particle_count, accelerations);
+#ifdef SIMULATE
             GPU_PERROR(cudaMemcpy(buff, device_particle_list_2, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
+#endif
         } else {
             calculate_accelerations<<<numBlocks, threadsPerBlock>>>(device_particle_list_2, particle_count, accelerations);
             position_update<<<numBlocks, threadsPerBlock>>>(device_particle_list_2, device_particle_list_1, particle_count, accelerations);
+#ifdef SIMULATE
             GPU_PERROR(cudaMemcpy(buff, device_particle_list_1, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
+#endif
         }
+#ifdef SIMULATE
+        for (int i = 0; i < particle_count; ++i) {
+            fprintf(out, "%d,%f,%f,%f\n", buff[i].particle_id, buff[i].x, buff[i].y, buff[i].z);
+        }
+#endif
     }
+
+#ifdef TIME_RUN
     clock_gettime(CLOCK_REALTIME, &time_stop);
 
     struct timespec temp;
@@ -218,15 +237,16 @@ int main(int argc, char **argv)
         GPU_PERROR(cudaMemcpy(out_list, device_particle_list_1, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
     }
         
-    GPU_PERROR(cudaFree(device_particle_list_1));
-    GPU_PERROR(cudaFree(device_particle_list_2));
-
     FILE *out = fopen(output_file, "w");
     fprintf(out, "particle_id,x,y,z\n");
     for (int i = 0; i < particle_count; ++i) {
         fprintf(out, "%d,%f,%f,%f\n", out_list[i].particle_id, out_list[i].x, out_list[i].y, out_list[i].z);
     }
     free(out_list);
+#endif
+
+    GPU_PERROR(cudaFree(device_particle_list_1));
+    GPU_PERROR(cudaFree(device_particle_list_2));
 
     return 0;
 }
