@@ -161,7 +161,6 @@ int main(int argc, char **argv)
         GPU_PERROR(cudaMemcpy(out_list, device_particle_list_1, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
     }
         
-    FILE *out = fopen(output_file, "w");
     fprintf(out, "particle_id,x,y,z\n");
     for (int i = 0; i < particle_count; ++i) {
         fprintf(out, "%d,%f,%f,%f\n", out_list[i].particle_id, out_list[i].x, out_list[i].y, out_list[i].z);
