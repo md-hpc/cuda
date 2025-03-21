@@ -9,7 +9,6 @@ extern "C" {
 #include <assert.h>
 
 #define MAX_PARTICLES_PER_BLOCK 1024
-#define CELL_CUTOFF_RADIUS_ANGST 100
 //#define EPSILON (1.65e-9)                       // ng * m^2 / s^2
 #define EPSILON (1.65e11)                        // ng * A^2 / s^2
 #define ARGON_MASS (39.948 * 1.66054e-15)       // ng
