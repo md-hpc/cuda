@@ -4,7 +4,7 @@ from matplotlib import animation
 import matplotlib.pyplot as plt
 import numpy as np
 
-L = 10
+L = 100
 
 # Read file and split timestemps by two newlines
 with open("particles") as f:
@@ -13,22 +13,20 @@ with open("particles") as f:
 # process timestemps
 timesteps = []
 for t, timestep in enumerate(data):
-    lines = timestep.splitlines()
+    particles = timestep.splitlines()
     particle_positions = []
 
-    for line in lines:
-        line = [d.strip() for d in line.split(',')]
-        r = np.array([float(d) for d in line[1:]])
+    for particle in particles:
+        particle = [d.strip() for d in particle.split(',')]
+        # coord in 3D space
+        r = np.array([float(d) for d in particle[1:]])
 
-        if np.any(r > L):
-            print(f"dropping particle @ {t}")
-        else:
-            timesteps[t].append(r)
+        particle_positions.append(r)
 
     if particle_positions:
         timesteps.append(np.stack(particle_positions))
 
-timesteps = timesteps[:200]
+#timesteps = timesteps[:200]
 
 fig = plt.figure()
 ax = fig.add_subplot(projection='3d')
