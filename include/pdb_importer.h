@@ -3,30 +3,6 @@
 
 #define MAX_PARTICLES_PER_CELL 128
 
-#ifndef CELL_LENGTH_X
-#define CELL_LENGTH_X 10
-#endif
-
-#ifndef CELL_LENGTH_Y
-#define CELL_LENGTH_Y 10
-#endif
-
-#ifndef CELL_LENGTH_Z
-#define CELL_LENGTH_Z 10
-#endif
-
-#ifndef TIMESTEPS
-#define TIMESTEPS 1
-#endif
-
-#ifndef UNIVERSE_LENGTH
-#define UNIVERSE_LENGTH 10
-#endif
-
-#ifndef TIMESTEP_DURATION_FS
-#define TIMESTEP_DURATION_FS 1e-15                            
-#endif
-
 
 struct Particle {
     int particle_id;
