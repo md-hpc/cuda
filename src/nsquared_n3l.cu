@@ -214,6 +214,7 @@ int main(int argc, char **argv)
         for (int i = 0; i < particle_count; ++i) {
             fprintf(out, "%d,%f,%f,%f\n", buff[i].particle_id, buff[i].x, buff[i].y, buff[i].z);
         }
+        fprintf(out, "\n");
 #endif
     }
 

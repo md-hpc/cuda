@@ -288,6 +288,7 @@ int main(int argc, char **argv)
                 }
             }
         }
+        fprintf(out, "\n");
 #endif
     }
 
