@@ -24,7 +24,7 @@ extern "C" {
 
 __device__ float compute_acceleration(float r_angstrom) {
         // in A / s^2
-        float temp = powf(SIGMA / r_angstrom, 6);
+        float temp = powf(SIGMA / r_angstrom, 6); // DON't USE POWF - do the multiplies explicitly
         float acceleration = 24 * EPSILON * (2 * temp * temp - temp) / (r_angstrom * ARGON_MASS);
         //float force = 4 * EPSILON * (12 * pow(SIGMA, 12.0f) / pow(r, 13.0f) - 6 * pow(SIGMA, 6.0f) / pow(r, 7.0f)) / ARGON_MASS;
 
@@ -49,7 +49,7 @@ __global__ void timestep(struct Particle *src_particle_list, struct Particle *ds
     for (int i = 1; i < particle_count; ++i) {
         struct Particle neighbor_particle = src_particle_list[(reference_particle_idx + i) % particle_count];
 
-        float norm = sqrtf(
+        float norm = sqrtf( // temps?
             (reference_particle.x - neighbor_particle.x) * (reference_particle.x - neighbor_particle.x) + 
             (reference_particle.y - neighbor_particle.y) * (reference_particle.y - neighbor_particle.y) + 
             (reference_particle.z - neighbor_particle.z) * (reference_particle.z - neighbor_particle.z)
