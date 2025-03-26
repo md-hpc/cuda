@@ -13,7 +13,7 @@ extern "C" {
 #define EPSILON (1.65e11)                        // ng * A^2 / s^2
 #define ARGON_MASS (39.948 * 1.66054e-15)       // ng
 #define SIGMA (0.034f)                           // A
-#define LJMIN (-4.0f * 24.0f * EPSILON / SIGMA * (powf(7.0f / 26.0f, 7.0f / 6.0f) - 2.0f * powf(7.0f / 26.0f, 13.0f / 6.0f)))
+#define LJMAX (4.0f * 24.0f * EPSILON / SIGMA * (powf(7.0f / 26.0f, 7.0f / 6.0f) - 2.0f * powf(7.0f / 26.0f, 13.0f / 6.0f)))
 #define GPU_PERROR(err) do {\
     if (err != cudaSuccess) {\
         fprintf(stderr,"gpu_perror: %s %s %d\n", cudaGetErrorString(err), __FILE__, __LINE__);\
@@ -28,8 +28,7 @@ __device__ float compute_acceleration(float r_angstrom) {
         float acceleration = 24 * EPSILON * (2 * temp * temp - temp) / (r_angstrom * ARGON_MASS);
         //float force = 4 * EPSILON * (12 * pow(SIGMA, 12.0f) / pow(r, 13.0f) - 6 * pow(SIGMA, 6.0f) / pow(r, 7.0f)) / ARGON_MASS;
 
-        //return (force < LJMIN) * LJMIN + !(force < LJMIN) * force;
-        return acceleration;
+        return (acceleration < LJMAX) * LJMAX + !(acceleration < LJMAX) * acceleration;
 }
 
 __global__ void timestep(struct Particle *src_particle_list, struct Particle *dst_particle_list, int particle_count)
@@ -57,9 +56,10 @@ __global__ void timestep(struct Particle *src_particle_list, struct Particle *ds
         );
         
         float acceleration = compute_acceleration(norm);
-        ax -= acceleration * (reference_particle.x - neighbor_particle.x) / norm;
-        ay -= acceleration * (reference_particle.y - neighbor_particle.y) / norm;
-        az -= acceleration * (reference_particle.z - neighbor_particle.z) / norm;
+        ax += acceleration * (reference_particle.x - neighbor_particle.x) / norm;
+        ay += acceleration * (reference_particle.y - neighbor_particle.y) / norm;
+        az += acceleration * (reference_particle.z - neighbor_particle.z) / norm;
+
     }
 
     // calculate velocity for reference particle

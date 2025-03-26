@@ -8,7 +8,7 @@
 #define EPSILON (1.65e11)                        // ng * A^2 / s^2
 #define ARGON_MASS (39.948 * 1.66054e-15)       // ng
 #define SIGMA (0.034f)                           // A
-#define LJMIN (-4.0f * 24.0f * EPSILON / SIGMA * (powf(7.0f / 26.0f, 7.0f / 6.0f) - 2.0f * powf(7.0f / 26.0f, 13.0f / 6.0f)))
+#define LJMIN (4.0f * 24.0f * EPSILON / SIGMA * (powf(7.0f / 26.0f, 7.0f / 6.0f) - 2.0f * powf(7.0f / 26.0f, 13.0f / 6.0f)))
 
 
 float compute_acceleration(float r_angstrom) {
@@ -17,13 +17,16 @@ float compute_acceleration(float r_angstrom) {
         float acceleration = 24 * EPSILON * (2 * temp * temp - temp) / (r_angstrom * ARGON_MASS);
         //float force = 4 * EPSILON * (12 * pow(SIGMA, 12.0f) / pow(r, 13.0f) - 6 * pow(SIGMA, 6.0f) / pow(r, 7.0f)) / ARGON_MASS;
 
-        //return (force < LJMIN) * LJMIN + !(force < LJMIN) * force;
+        return (acceleration < LJMIN) * LJMIN + !(acceleration < LJMIN) * acceleration;
         return acceleration;
 }
 
 void naive(struct Particle *particle_list, const int particle_count)
 {
         float accelerations[particle_count][3];
+
+	FILE *file = fopen("out_naive.csv", "w");
+        fprintf(file, "particle_id,x,y,z\n");
 
         // timestep
         for (unsigned int t = 0; t < TIMESTEPS; ++t) {
@@ -79,6 +82,8 @@ void naive(struct Particle *particle_list, const int particle_count)
                         reference_particle.z = z;
 
                         particle_list[i] = reference_particle;
+                        fprintf(file, "%d,%f,%f,%f\n", reference_particle.particle_id, reference_particle.x, reference_particle.y, reference_particle.z);
                 }
+                fprintf(file, "\n");
         }
 }

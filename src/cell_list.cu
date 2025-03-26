@@ -243,6 +243,7 @@ int main(int argc, char **argv)
     dim3 threadsPerBlock(MAX_PARTICLES_PER_CELL);
 
 #ifdef SIMULATE
+    char *output_file = argv[2];
     FILE *out = fopen(output_file, "w");
     fprintf(out, "particle_id,x,y,z\n");
 #endif
@@ -261,14 +262,14 @@ int main(int argc, char **argv)
             particle_update<<<numBlocksUpdate, threadsPerBlock>>>(device_cell_list1, accelerations);
             motion_update<<<numBlocksUpdate, threadsPerBlock>>>(device_cell_list1, device_cell_list2);
 #ifdef SIMULATE
-            GPU_PERROR(cudaMemcpy(cell_list, device_cell_list_2, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
+            GPU_PERROR(cudaMemcpy(cell_list, device_cell_list2, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
 #endif
         } else {
             force_eval<<<numBlocksCalculate, threadsPerBlock>>>(device_cell_list2, accelerations);
             particle_update<<<numBlocksUpdate, threadsPerBlock>>>(device_cell_list2, accelerations);
             motion_update<<<numBlocksUpdate, threadsPerBlock>>>(device_cell_list2, device_cell_list1);
 #ifdef SIMULATE
-            GPU_PERROR(cudaMemcpy(cell_list, device_cell_list_1, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
+            GPU_PERROR(cudaMemcpy(cell_list, device_cell_list1, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
 #endif
         }
 #ifdef SIMULATE
