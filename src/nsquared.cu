@@ -34,7 +34,7 @@ __device__ float compute_acceleration(float r_angstrom) {
 __global__ void timestep(struct Particle *src_particle_list, struct Particle *dst_particle_list, int particle_count)
 {
     // each thread gets a particle as a reference particle
-    int reference_particle_idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int reference_particle_idx = blockIdx.x * blockDim.x + threadIdx.x;  // MAYBE -- declare fields separately as floats
     
     if (reference_particle_idx >= particle_count)
         return; 
@@ -69,7 +69,8 @@ __global__ void timestep(struct Particle *src_particle_list, struct Particle *ds
 
     // get new reference particle position taking into account periodic boundary conditions
     float x = reference_particle.x + reference_particle.vx * TIMESTEP_DURATION_FS;
-    x += ((x < 0) - (x > UNIVERSE_LENGTH)) * UNIVERSE_LENGTH;
+    
+
     reference_particle.x = x;
  
     float y = reference_particle.y + reference_particle.vy * TIMESTEP_DURATION_FS;
