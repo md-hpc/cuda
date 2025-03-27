@@ -4,7 +4,8 @@
 #include <stdlib.h>
 #include <sys/errno.h>
 
-int import_atoms(char *filename, struct Particle **particle_list, int *particle_count)
+// Creates arrays for x, y, z position and particle_id from a PDB file
+int import_atoms(char *filename, float *particle_id, float *x, float *y, float *z, int *particle_count)
 {
     FILE *file = fopen(filename, "r");
     if (file == NULL) {
@@ -13,44 +14,41 @@ int import_atoms(char *filename, struct Particle **particle_list, int *particle_
     }
 
     char line[80];
-    struct Particle *particles = NULL;
     int count = 0;
 
     while (fgets(line, sizeof(line), file)) {
         if (strncmp(line, "ATOM", 4) != 0)
             continue;
-        
-        particles = realloc(particles, sizeof(struct Particle) * (count + 1));
-        if (particles == NULL) {
+        particle_id = realloc(particle_id, sizeof(float) * count + 1);
+        x = realloc(x, sizeof(float) * count + 1);
+        y = realloc(y, sizeof(float) * count + 1);
+        z = realloc(z, sizeof(float) * count + 1);
+        if (particle_id == NULL || x == NULL || y == NULL || z = NULL) {
             perror("realloc");
             return errno;
         }
 
         char float_buffer[9] = {0};
         memcpy(float_buffer, line + 30, 8);
-        particles[count].x = strtof(float_buffer, NULL);
+        x[count] = strtof(float_buffer, NULL);
         memcpy(float_buffer, line + 38, 8);
-        particles[count].y = strtof(float_buffer, NULL);
+        y[count] = strtof(float_buffer, NULL);
         memcpy(float_buffer, line + 46, 8);
-        particles[count].z = strtof(float_buffer, NULL);
+        z[count] = strtof(float_buffer, NULL);
 
-        particles[count].vx = 0;
-        particles[count].vy = 0;
-        particles[count].vz = 0;
-
-        particles[count].particle_id = strtol(line + 6, NULL, 0);
+        particle_id[count] = strtol(line + 6, NULL, 0);
 
         ++count;
     }
 
     fclose(file);
 
-    *particle_list = particles;
     *particle_count = count;
 
     return 0;
 }
 
+// TOOD: update to work will x y z arrays rather than particle structs
 void create_cell_list(struct Particle *particle_list, int particle_count,
                       struct Cell *cell_list, int cell_cutoff_radius)
 {
@@ -86,6 +84,7 @@ void create_cell_list(struct Particle *particle_list, int particle_count,
     }
 }
 
+// TOOD: update to work will x y z arrays rather than particle structs
 void cell_list_to_csv(struct Cell *cell_list, int num_cells, char *filename)
 {
     FILE *file = fopen(filename, "w");

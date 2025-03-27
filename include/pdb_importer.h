@@ -18,6 +18,7 @@ struct Cell {
     struct Particle particle_list[MAX_PARTICLES_PER_CELL];
 };
 
+// TODO: update
 /**
  * Reads atomic data from a .pdb file, extracting positions for particles.
  * Dynamically allocates memory for the particle list and returns the count.
@@ -27,7 +28,7 @@ struct Cell {
  * @param particle_count Pointer to store the number of particles imported.
  * @return 0 on success, errno on failure.
  */
-int import_atoms(char *filename, struct Particle **particle_list, int *particle_count);
+int import_atoms(char *filename, float *particle_id, float *x, float *y, float *z, int *particle_count);
 
 /**
  * @brief Assigns particles to a spatial cell grid based on their positions.

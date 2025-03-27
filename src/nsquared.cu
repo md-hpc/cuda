@@ -13,7 +13,6 @@ extern "C" {
 #define EPSILON (1.65e11)                        // ng * A^2 / s^2
 #define ARGON_MASS (39.948 * 1.66054e-15)       // ng
 #define SIGMA (0.034f)                           // A
-#define LJMAX (4.0f * 24.0f * EPSILON / SIGMA * (powf(7.0f / 26.0f, 7.0f / 6.0f) - 2.0f * powf(7.0f / 26.0f, 13.0f / 6.0f)))
 #define GPU_PERROR(err) do {\
     if (err != cudaSuccess) {\
         fprintf(stderr,"gpu_perror: %s %s %d\n", cudaGetErrorString(err), __FILE__, __LINE__);\
@@ -21,6 +20,7 @@ extern "C" {
     }\
 } while (0);
 
+constexpr float LJMAX = (4.0f * 24.0f * EPSILON / SIGMA * (powf(7.0f / 26.0f, 7.0f / 6.0f) - 2.0f * powf(7.0f / 26.0f, 13.0f / 6.0f)));
 
 __device__ float compute_acceleration(float r_angstrom) {
         // in A / s^2
@@ -31,15 +31,19 @@ __device__ float compute_acceleration(float r_angstrom) {
         return (acceleration < LJMAX) * LJMAX + !(acceleration < LJMAX) * acceleration;
 }
 
-__global__ void timestep(struct Particle *src_particle_list, struct Particle *dst_particle_list, int particle_count)
+__global__ void timestep(float *particle_id, float *src_x, float *src_y, float *src_z,
+                         float *vx, float *vy, float *vz, float *dst_x, float *dst_y,
+                         float *dst_z, int particle_count)
 {
     // each thread gets a particle as a reference particle
-    int reference_particle_idx = blockIdx.x * blockDim.x + threadIdx.x;  // MAYBE -- declare fields separately as floats
+    int reference_particle_idx = blockIdx.x * blockDim.x + threadIdx.x;
     
     if (reference_particle_idx >= particle_count)
         return; 
 
-    struct Particle reference_particle = src_particle_list[reference_particle_idx];
+    float reference_x = src_x[reference_particle_id]; 
+    float reference_y = src_y[reference_particle_id]; 
+    float reference_z = src_z[reference_particle_id]; 
 
     float ax = 0;
     float ay = 0;
@@ -47,41 +51,48 @@ __global__ void timestep(struct Particle *src_particle_list, struct Particle *ds
 
     // accumulate accelerations for every other particle
     for (int i = 1; i < particle_count; ++i) {
-        struct Particle neighbor_particle = src_particle_list[(reference_particle_idx + i) % particle_count];
+        float neighbor_x = src_x[(reference_particle_idx + i) % particle_count]; 
+        float neighbor_y = src_y[(reference_particle_idx + i) % particle_count]; 
+        float neighbor_z = src_z[(reference_particle_idx + i) % particle_count]; 
 
-        float norm = sqrtf( // temps?
-            (reference_particle.x - neighbor_particle.x) * (reference_particle.x - neighbor_particle.x) + 
-            (reference_particle.y - neighbor_particle.y) * (reference_particle.y - neighbor_particle.y) + 
-            (reference_particle.z - neighbor_particle.z) * (reference_particle.z - neighbor_particle.z)
-        );
+        float diff_x = reference_x - neighbor_x;
+        float diff_y = reference_y - neighbor_y;
+        float diff_z = reference_z - neighbor_z;
+        float norm = sqrtf((diff_x * diff_x) + (diff_y * diff_y) + (diff_z * diff_z));
         
         float acceleration = compute_acceleration(norm);
-        ax += acceleration * (reference_particle.x - neighbor_particle.x) / norm;
-        ay += acceleration * (reference_particle.y - neighbor_particle.y) / norm;
-        az += acceleration * (reference_particle.z - neighbor_particle.z) / norm;
-
+        ax += acceleration * (reference_x - neighbor_x) / norm;
+        ay += acceleration * (reference_y - neighbor_y) / norm;
+        az += acceleration * (reference_z - neighbor_z) / norm;
     }
 
     // calculate velocity for reference particle
-    reference_particle.vx += ax * TIMESTEP_DURATION_FS;
-    reference_particle.vy += ay * TIMESTEP_DURATION_FS;
-    reference_particle.vz += az * TIMESTEP_DURATION_FS;
+    float reference_vx = vx[reference_particle_id]; 
+    float reference_vy = vy[reference_particle_id]; 
+    float reference_vz = vz[reference_particle_id]; 
+    reference_vx += ax * TIMESTEP_DURATION_FS;
+    reference_vy += ay * TIMESTEP_DURATION_FS;
+    reference_vz += az * TIMESTEP_DURATION_FS;
 
     // get new reference particle position taking into account periodic boundary conditions
-    float x = reference_particle.x + reference_particle.vx * TIMESTEP_DURATION_FS;
-    
-
-    reference_particle.x = x;
+    float x = reference_x + reference_vx * TIMESTEP_DURATION_FS;
+    x += ((x < 0) - (x > UNIVERSE_LENGTH)) * UNIVERSE_LENGTH;
+    reference_x = x;
  
-    float y = reference_particle.y + reference_particle.vy * TIMESTEP_DURATION_FS;
+    float y = reference_y + reference_vy * TIMESTEP_DURATION_FS;
     y += ((y < 0) - (y > UNIVERSE_LENGTH)) * UNIVERSE_LENGTH;
-    reference_particle.y = y;
+    reference_y = y;
 
-    float z = reference_particle.z + reference_particle.vz * TIMESTEP_DURATION_FS;
+    float z = reference_z + reference_vz * TIMESTEP_DURATION_FS;
     z += ((z < 0) - (z > UNIVERSE_LENGTH)) * UNIVERSE_LENGTH;
-    reference_particle.z = z;
+    reference_z = z;
 
-    dst_particle_list[reference_particle_idx] = reference_particle;
+    dst_vx[reference_particle_idx] = reference_vx;
+    dst_vy[reference_particle_idx] = reference_vy;
+    dst_vz[reference_particle_idx] = reference_vz;
+    dst_x[reference_particle_idx] = reference_x;
+    dst_y[reference_particle_idx] = reference_y;
+    dst_z[reference_particle_idx] = reference_z;
 }
 
 int main(int argc, char **argv) 
@@ -95,20 +106,44 @@ int main(int argc, char **argv)
     char *output_file = argv[2];
 
     int particle_count;
-    struct Particle *particle_list;
-    struct Particle *device_particle_list_1;
-    struct Particle *device_particle_list_2;
-    import_atoms(input_file, &particle_list, &particle_count);
 
-    GPU_PERROR(cudaMalloc(&device_particle_list_1, particle_count * sizeof(struct Particle)));
-    GPU_PERROR(cudaMalloc(&device_particle_list_2, particle_count * sizeof(struct Particle)));
-    GPU_PERROR(cudaMemcpy(device_particle_list_1, particle_list, particle_count * sizeof(struct Particle), cudaMemcpyHostToDevice));
+    float *host_particle_ids;
+    float *host_x;
+    float *host_y;
+    float *host_z;
+
+    float *device_particle_ids;
+    float *device_x_1;
+    float *device_y_1;
+    float *device_z_1;
+    float *device_x_2;
+    float *device_y_2;
+    float *device_z_2;
+    float *vx;
+    float *vy;
+    float *vz;
+
+    inport_atoms(input_file, host_particle_ids, host_x, host_y, host_z, &particle_count);
+
+    GPU_PERROR(cudaMalloc(device_particle_ids, particle_count * sizeof(float)));
+    GPU_PERROR(cudaMalloc(device_x_1, particle_count * sizeof(float)));
+    GPU_PERROR(cudaMalloc(device_y_1, particle_count * sizeof(float)));
+    GPU_PERROR(cudaMalloc(device_z_1, particle_count * sizeof(float)));
+    GPU_PERROR(cudaMalloc(device_x_2, particle_count * sizeof(float)));
+    GPU_PERROR(cudaMalloc(device_y_2, particle_count * sizeof(float)));
+    GPU_PERROR(cudaMalloc(device_z_2, particle_count * sizeof(float)));
+    GPU_PERROR(cudaMalloc(vx, particle_count * sizeof(float)));
+    GPU_PERROR(cudaMalloc(vy, particle_count * sizeof(float)));
+    GPU_PERROR(cudaMalloc(vz, particle_count * sizeof(float)));
+
+    GPU_PERROR(cudaMalloc(device_particle_ids, host_particle_ids, particle_count * sizeof(float), cudaMemcpyHostToDevice));
+    GPU_PERROR(cudaMemcpy(device_x_1, host_x, particle_count * sizeof(float), cudaMemcpyHostToDevice));
+    GPU_PERROR(cudaMemcpy(device_y_1, host_x, particle_count * sizeof(float), cudaMemcpyHostToDevice));
+    GPU_PERROR(cudaMemcpy(device_z_1, host_x, particle_count * sizeof(float), cudaMemcpyHostToDevice));
 
     // set parameters
     dim3 numBlocks((particle_count - 1) / MAX_PARTICLES_PER_BLOCK + 1);
     dim3 threadsPerBlock(MAX_PARTICLES_PER_BLOCK);
-    struct Particle *buff = (struct Particle *) malloc(particle_count * sizeof(struct Particle));
-    GPU_PERROR(cudaMemcpy(buff, device_particle_list_1, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
 
 #ifdef SIMULATE
     FILE *out = fopen(output_file, "w");
@@ -123,19 +158,23 @@ int main(int argc, char **argv)
 
     for (int t = 1l; t <= TIMESTEPS; ++t) {
         if (t % 2 == 1) {
-            timestep<<<numBlocks, threadsPerBlock>>>(device_particle_list_1, device_particle_list_2, particle_count);
+            timestep<<<numBlocks, threadsPerBlock>>>(device_particle_ids, device_x_1, device_y_1, device_z_1, vx, vy, vz, device_x_2, device_y_2, device_z_2, particle_count);
 #ifdef SIMULATE
-            GPU_PERROR(cudaMemcpy(buff, device_particle_list_2, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
+            GPU_PERROR(cudaMemcpy(host_x, device_x_2, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
+            GPU_PERROR(cudaMemcpy(host_y, device_y_2, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
+            GPU_PERROR(cudaMemcpy(host_z, device_z_2, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
 #endif
         } else {
-            timestep<<<numBlocks, threadsPerBlock>>>(device_particle_list_2, device_particle_list_1, particle_count);
+            timestep<<<numBlocks, threadsPerBlock>>>(device_particle_ids,, device_x_2, device_y_2, device_z_2, vx, vy, vz, device_x_1, device_y_1, device_z_1, particle_count);
 #ifdef SIMULATE
-            GPU_PERROR(cudaMemcpy(buff, device_particle_list_1, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
+            GPU_PERROR(cudaMemcpy(host_x, device_x_1, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
+            GPU_PERROR(cudaMemcpy(host_y, device_y_1, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
+            GPU_PERROR(cudaMemcpy(host_z, device_z_1, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
 #endif
         }
 #ifdef SIMULATE
         for (int i = 0; i < particle_count; ++i) {
-            fprintf(out, "%d,%f,%f,%f\n", buff[i].particle_id, buff[i].x, buff[i].y, buff[i].z);
+            fprintf(out, "%d,%f,%f,%f\n", host_particle_ids[i], host_x[i], host_y[i], host_z[i]);
         }
         fprintf(out, "\n");
 #endif
@@ -154,11 +193,14 @@ int main(int argc, char **argv)
 
     printf("nsquared,%f\n", ((double) temp.tv_sec) + (((double) temp.tv_nsec) * 1e-9));
 
-    struct Particle *out_list = (struct Particle *) malloc(particle_count * sizeof(struct Particle));
     if (TIMESTEPS & 1) {
-        GPU_PERROR(cudaMemcpy(out_list, device_particle_list_2, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
+        GPU_PERROR(cudaMemcpy(host_x, device_x_2, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
+        GPU_PERROR(cudaMemcpy(host_y, device_y_2, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
+        GPU_PERROR(cudaMemcpy(host_z, device_z_2, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
     } else {
-        GPU_PERROR(cudaMemcpy(out_list, device_particle_list_1, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
+        GPU_PERROR(cudaMemcpy(host_x, device_x_1, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
+        GPU_PERROR(cudaMemcpy(host_y, device_y_1, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
+        GPU_PERROR(cudaMemcpy(host_z, device_z_1, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
     }
         
     FILE *out = fopen(output_file, "w");
@@ -166,11 +208,18 @@ int main(int argc, char **argv)
     for (int i = 0; i < particle_count; ++i) {
         fprintf(out, "%d,%f,%f,%f\n", out_list[i].particle_id, out_list[i].x, out_list[i].y, out_list[i].z);
     }
-    free(out_list);
 #endif
 
-    GPU_PERROR(cudaFree(device_particle_list_1));
-    GPU_PERROR(cudaFree(device_particle_list_2));
+    GPU_PERROR(cudaFree(device_particle_ids));
+    GPU_PERROR(cudaFree(device_x_1));
+    GPU_PERROR(cudaFree(device_y_1));
+    GPU_PERROR(cudaFree(device_z_1));
+    GPU_PERROR(cudaFree(device_x_2));
+    GPU_PERROR(cudaFree(device_y_2));
+    GPU_PERROR(cudaFree(device_z_2));
+    GPU_PERROR(cudaFree(device_vx));
+    GPU_PERROR(cudaFree(device_vy));
+    GPU_PERROR(cudaFree(device_vz));
 
     return 0;
 }
