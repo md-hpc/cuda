@@ -28,7 +28,7 @@ struct Cell {
  * @param particle_count Pointer to store the number of particles imported.
  * @return 0 on success, errno on failure.
  */
-int import_atoms(char *filename, float *particle_id, float *x, float *y, float *z, int *particle_count);
+int import_atoms(char *filename, int **particle_ids, float **x, float **y, float **z, int *particle_count);
 
 /**
  * @brief Assigns particles to a spatial cell grid based on their positions.

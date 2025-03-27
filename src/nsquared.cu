@@ -108,10 +108,10 @@ int main(int argc, char **argv)
 
     int particle_count;
 
-    float *host_particle_ids;
-    float *host_x;
-    float *host_y;
-    float *host_z;
+    float *host_particle_ids = NULL;
+    float *host_x = NULL;
+    float *host_y = NULL;
+    float *host_z = NULL;
 
     float *device_particle_ids;
     float *device_x_1;

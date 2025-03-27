@@ -5,7 +5,7 @@
 #include <sys/errno.h>
 
 // Creates arrays for x, y, z position and particle_id from a PDB file
-int import_atoms(char *filename, float *particle_id, float *x, float *y, float *z, int *particle_count)
+int import_atoms(char *filename, int **particle_ids, float **x, float **y, float **z, int *particle_count)
 {
     FILE *file = fopen(filename, "r");
     if (file == NULL) {
@@ -19,24 +19,24 @@ int import_atoms(char *filename, float *particle_id, float *x, float *y, float *
     while (fgets(line, sizeof(line), file)) {
         if (strncmp(line, "ATOM", 4) != 0)
             continue;
-        particle_id = realloc(particle_id, sizeof(float) * count + 1);
-        x = realloc(x, sizeof(float) * count + 1);
-        y = realloc(y, sizeof(float) * count + 1);
-        z = realloc(z, sizeof(float) * count + 1);
-        if (particle_id == NULL || x == NULL || y == NULL || z == NULL) {
+        *particle_ids = realloc(*particle_ids, sizeof(float) * count + 1);
+        *x = realloc(*x, sizeof(float) * count + 1);
+        *y = realloc(*y, sizeof(float) * count + 1);
+        *z = realloc(*z, sizeof(float) * count + 1);
+        if (*particle_ids == NULL || *x == NULL || *y == NULL || *z == NULL) {
             perror("realloc");
             return errno;
         }
 
         char float_buffer[9] = {0};
         memcpy(float_buffer, line + 30, 8);
-        x[count] = strtof(float_buffer, NULL);
+        *x[count] = strtof(float_buffer, NULL);
         memcpy(float_buffer, line + 38, 8);
-        y[count] = strtof(float_buffer, NULL);
+        *y[count] = strtof(float_buffer, NULL);
         memcpy(float_buffer, line + 46, 8);
-        z[count] = strtof(float_buffer, NULL);
+        *z[count] = strtof(float_buffer, NULL);
 
-        particle_id[count] = strtol(line + 6, NULL, 0);
+        *particle_ids[count] = strtol(line + 6, NULL, 0);
 
         ++count;
     }
