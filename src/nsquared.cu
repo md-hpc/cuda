@@ -124,7 +124,7 @@ int main(int argc, char **argv)
     float *vy;
     float *vz;
 
-    import_atoms(input_file, host_particle_ids, host_x, host_y, host_z, &particle_count);
+    import_atoms(input_file, &host_particle_ids, &host_x, &host_y, &host_z, &particle_count);
 
     GPU_PERROR(cudaMalloc(&device_particle_ids, particle_count * sizeof(float)));
     GPU_PERROR(cudaMalloc(&device_x_1, particle_count * sizeof(float)));
