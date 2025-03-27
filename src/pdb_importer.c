@@ -23,7 +23,7 @@ int import_atoms(char *filename, float *particle_id, float *x, float *y, float *
         x = realloc(x, sizeof(float) * count + 1);
         y = realloc(y, sizeof(float) * count + 1);
         z = realloc(z, sizeof(float) * count + 1);
-        if (particle_id == NULL || x == NULL || y == NULL || z = NULL) {
+        if (particle_id == NULL || x == NULL || y == NULL || z == NULL) {
             perror("realloc");
             return errno;
         }
