@@ -20,7 +20,8 @@ extern "C" {
     }\
 } while (0);
 
-constexpr float LJMAX = (4.0f * 24.0f * EPSILON / SIGMA * (powf(7.0f / 26.0f, 7.0f / 6.0f) - 2.0f * powf(7.0f / 26.0f, 13.0f / 6.0f)));
+// constexpr float LJMAX = (4.0f * 24.0f * EPSILON / SIGMA * (powf(7.0f / 26.0f, 7.0f / 6.0f) - 2.0f * powf(7.0f / 26.0f, 13.0f / 6.0f)));
+constexpr float LJMAX = (4.0f * 24.0f * EPSILON / SIGMA * (0.216344308307f - 2.0f * 0.0582465445441f));
 
 __device__ float compute_acceleration(float r_angstrom) {
         // in A / s^2
@@ -123,7 +124,7 @@ int main(int argc, char **argv)
     float *vy;
     float *vz;
 
-    inport_atoms(input_file, host_particle_ids, host_x, host_y, host_z, &particle_count);
+    import_atoms(input_file, host_particle_ids, host_x, host_y, host_z, &particle_count);
 
     GPU_PERROR(cudaMalloc(&device_particle_ids, particle_count * sizeof(float)));
     GPU_PERROR(cudaMalloc(&device_x_1, particle_count * sizeof(float)));
