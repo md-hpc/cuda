@@ -36,7 +36,7 @@ int import_atoms(char *filename, int **particle_ids, float **x, float **y, float
         memcpy(float_buffer, line + 46, 8);
         *z[count] = strtof(float_buffer, NULL);
 
-        *particle_ids[count] = strtol(line + 6, NULL, 0);
+        *particle_ids[count] = count; //strtol(line + 6, NULL, 0);
 
         ++count;
     }
