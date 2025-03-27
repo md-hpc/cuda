@@ -16,7 +16,7 @@ int import_atoms(char *filename, int **particle_ids, float **x, float **y, float
     char line[80];
     int count = 0;
 
-    float *local_particle_ids = NULL;
+    int *local_particle_ids = NULL;
     float *local_x = NULL;
     float *local_y = NULL;
     float *local_z = NULL;
