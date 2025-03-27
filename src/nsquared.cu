@@ -41,9 +41,9 @@ __global__ void timestep(float *particle_id, float *src_x, float *src_y, float *
     if (reference_particle_idx >= particle_count)
         return; 
 
-    float reference_x = src_x[reference_particle_id]; 
-    float reference_y = src_y[reference_particle_id]; 
-    float reference_z = src_z[reference_particle_id]; 
+    float reference_x = src_x[reference_particle_idx]; 
+    float reference_y = src_y[reference_particle_idx]; 
+    float reference_z = src_z[reference_particle_idx]; 
 
     float ax = 0;
     float ay = 0;
@@ -67,9 +67,9 @@ __global__ void timestep(float *particle_id, float *src_x, float *src_y, float *
     }
 
     // calculate velocity for reference particle
-    float reference_vx = vx[reference_particle_id]; 
-    float reference_vy = vy[reference_particle_id]; 
-    float reference_vz = vz[reference_particle_id]; 
+    float reference_vx = vx[reference_particle_idx]; 
+    float reference_vy = vy[reference_particle_idx]; 
+    float reference_vz = vz[reference_particle_idx]; 
     reference_vx += ax * TIMESTEP_DURATION_FS;
     reference_vy += ay * TIMESTEP_DURATION_FS;
     reference_vz += az * TIMESTEP_DURATION_FS;
@@ -87,9 +87,9 @@ __global__ void timestep(float *particle_id, float *src_x, float *src_y, float *
     z += ((z < 0) - (z > UNIVERSE_LENGTH)) * UNIVERSE_LENGTH;
     reference_z = z;
 
-    dst_vx[reference_particle_idx] = reference_vx;
-    dst_vy[reference_particle_idx] = reference_vy;
-    dst_vz[reference_particle_idx] = reference_vz;
+    vx[reference_particle_idx] = reference_vx;
+    vy[reference_particle_idx] = reference_vy;
+    vz[reference_particle_idx] = reference_vz;
     dst_x[reference_particle_idx] = reference_x;
     dst_y[reference_particle_idx] = reference_y;
     dst_z[reference_particle_idx] = reference_z;
@@ -125,21 +125,24 @@ int main(int argc, char **argv)
 
     inport_atoms(input_file, host_particle_ids, host_x, host_y, host_z, &particle_count);
 
-    GPU_PERROR(cudaMalloc(device_particle_ids, particle_count * sizeof(float)));
-    GPU_PERROR(cudaMalloc(device_x_1, particle_count * sizeof(float)));
-    GPU_PERROR(cudaMalloc(device_y_1, particle_count * sizeof(float)));
-    GPU_PERROR(cudaMalloc(device_z_1, particle_count * sizeof(float)));
-    GPU_PERROR(cudaMalloc(device_x_2, particle_count * sizeof(float)));
-    GPU_PERROR(cudaMalloc(device_y_2, particle_count * sizeof(float)));
-    GPU_PERROR(cudaMalloc(device_z_2, particle_count * sizeof(float)));
-    GPU_PERROR(cudaMalloc(vx, particle_count * sizeof(float)));
-    GPU_PERROR(cudaMalloc(vy, particle_count * sizeof(float)));
-    GPU_PERROR(cudaMalloc(vz, particle_count * sizeof(float)));
+    GPU_PERROR(cudaMalloc(&device_particle_ids, particle_count * sizeof(float)));
+    GPU_PERROR(cudaMalloc(&device_x_1, particle_count * sizeof(float)));
+    GPU_PERROR(cudaMalloc(&device_y_1, particle_count * sizeof(float)));
+    GPU_PERROR(cudaMalloc(&device_z_1, particle_count * sizeof(float)));
+    GPU_PERROR(cudaMalloc(&device_x_2, particle_count * sizeof(float)));
+    GPU_PERROR(cudaMalloc(&device_y_2, particle_count * sizeof(float)));
+    GPU_PERROR(cudaMalloc(&device_z_2, particle_count * sizeof(float)));
+    GPU_PERROR(cudaMalloc(&vx, particle_count * sizeof(float)));
+    GPU_PERROR(cudaMalloc(&vy, particle_count * sizeof(float)));
+    GPU_PERROR(cudaMalloc(&vz, particle_count * sizeof(float)));
 
-    GPU_PERROR(cudaMalloc(device_particle_ids, host_particle_ids, particle_count * sizeof(float), cudaMemcpyHostToDevice));
+    GPU_PERROR(cudaMemcpy(&device_particle_ids, host_particle_ids, particle_count * sizeof(float), cudaMemcpyHostToDevice));
     GPU_PERROR(cudaMemcpy(device_x_1, host_x, particle_count * sizeof(float), cudaMemcpyHostToDevice));
     GPU_PERROR(cudaMemcpy(device_y_1, host_x, particle_count * sizeof(float), cudaMemcpyHostToDevice));
     GPU_PERROR(cudaMemcpy(device_z_1, host_x, particle_count * sizeof(float), cudaMemcpyHostToDevice));
+    GPU_PERROR(cudaMemset(vx, 0, particle_count * sizeof(float)));
+    GPU_PERROR(cudaMemset(vy, 0, particle_count * sizeof(float)));
+    GPU_PERROR(cudaMemset(vz, 0, particle_count * sizeof(float)));
 
     // set parameters
     dim3 numBlocks((particle_count - 1) / MAX_PARTICLES_PER_BLOCK + 1);
@@ -165,7 +168,7 @@ int main(int argc, char **argv)
             GPU_PERROR(cudaMemcpy(host_z, device_z_2, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
 #endif
         } else {
-            timestep<<<numBlocks, threadsPerBlock>>>(device_particle_ids,, device_x_2, device_y_2, device_z_2, vx, vy, vz, device_x_1, device_y_1, device_z_1, particle_count);
+            timestep<<<numBlocks, threadsPerBlock>>>(device_particle_ids, device_x_2, device_y_2, device_z_2, vx, vy, vz, device_x_1, device_y_1, device_z_1, particle_count);
 #ifdef SIMULATE
             GPU_PERROR(cudaMemcpy(host_x, device_x_1, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
             GPU_PERROR(cudaMemcpy(host_y, device_y_1, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
@@ -217,9 +220,9 @@ int main(int argc, char **argv)
     GPU_PERROR(cudaFree(device_x_2));
     GPU_PERROR(cudaFree(device_y_2));
     GPU_PERROR(cudaFree(device_z_2));
-    GPU_PERROR(cudaFree(device_vx));
-    GPU_PERROR(cudaFree(device_vy));
-    GPU_PERROR(cudaFree(device_vz));
+    GPU_PERROR(cudaFree(vx));
+    GPU_PERROR(cudaFree(vy));
+    GPU_PERROR(cudaFree(vz));
 
     return 0;
 }
