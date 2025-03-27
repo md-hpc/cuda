@@ -108,10 +108,10 @@ int main(int argc, char **argv)
 
     int particle_count;
 
-    int *host_particle_ids = NULL;
-    float *host_x = NULL;
-    float *host_y = NULL;
-    float *host_z = NULL;
+    int *host_particle_ids;
+    float *host_x;
+    float *host_y;
+    float *host_z;
 
     float *device_particle_ids;
     float *device_x_1;
@@ -198,13 +198,13 @@ int main(int argc, char **argv)
     printf("nsquared,%f\n", ((double) temp.tv_sec) + (((double) temp.tv_nsec) * 1e-9));
 
     if (TIMESTEPS & 1) {
-        GPU_PERROR(cudaMemcpy(host_x, device_x_2, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
-        GPU_PERROR(cudaMemcpy(host_y, device_y_2, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
-        GPU_PERROR(cudaMemcpy(host_z, device_z_2, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
+        GPU_PERROR(cudaMemcpy(host_x, device_x_2, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
+        GPU_PERROR(cudaMemcpy(host_y, device_y_2, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
+        GPU_PERROR(cudaMemcpy(host_z, device_z_2, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
     } else {
-        GPU_PERROR(cudaMemcpy(host_x, device_x_1, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
-        GPU_PERROR(cudaMemcpy(host_y, device_y_1, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
-        GPU_PERROR(cudaMemcpy(host_z, device_z_1, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
+        GPU_PERROR(cudaMemcpy(host_x, device_x_1, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
+        GPU_PERROR(cudaMemcpy(host_y, device_y_1, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
+        GPU_PERROR(cudaMemcpy(host_z, device_z_1, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
     }
         
     FILE *out = fopen(output_file, "w");
