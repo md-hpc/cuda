@@ -108,7 +108,7 @@ int main(int argc, char **argv)
 
     int particle_count;
 
-    float *host_particle_ids = NULL;
+    int *host_particle_ids = NULL;
     float *host_x = NULL;
     float *host_y = NULL;
     float *host_z = NULL;
