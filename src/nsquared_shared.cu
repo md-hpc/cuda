@@ -8,7 +8,7 @@ extern "C" {
 #include <curand.h>
 #include <assert.h>
 
-#define MAX_PARTICLES_PER_BLOCK 1024
+#define MAX_PARTICLES_PER_BLOCK 32
 //#define EPSILON (1.65e-9)                       // ng * m^2 / s^2
 #define EPSILON (1.65e11)                        // ng * A^2 / s^2
 #define ARGON_MASS (39.948 * 1.66054e-15)       // ng
@@ -62,7 +62,7 @@ __global__ void timestep(float *particle_id, float *src_x, float *src_y, float *
         shared_x[threadIdx.x] = src_x[i + threadIdx.x];
         shared_y[threadIdx.x] = src_y[i + threadIdx.x];
         shared_z[threadIdx.x] = src_z[i + threadIdx.x];
-        __syncthreads();
+        //__syncthreads();
 
         for (int j = 0; j < MAX_PARTICLES_PER_BLOCK; ++j) {
             if (shared_id[(threadIdx.x + j) % MAX_PARTICLES_PER_BLOCK] == reference_particle_id)
@@ -82,7 +82,7 @@ __global__ void timestep(float *particle_id, float *src_x, float *src_y, float *
             ay += acceleration * (reference_y - neighbor_y) / norm;
             az += acceleration * (reference_z - neighbor_z) / norm;
         }
-        __syncthreads();
+        //__syncthreads();
     }
 
     // calculate velocity for reference particle
