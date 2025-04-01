@@ -96,7 +96,7 @@ void create_cell_list(const int *particle_ids, const float *x, const float *y, c
     }
 
     for (int i = 0; i < CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z; ++i) {
-        memset(&cell_list[i].particle_idx[free_idx[i]], -1, (MAX_PARTICLES_PER_CELL - free_idx[i]) * sizeof(int));
+        memset(&cell_list[i].particle_ids[free_idx[i]], -1, (MAX_PARTICLES_PER_CELL - free_idx[i]) * sizeof(int));
     }
 }
 
@@ -110,7 +110,7 @@ void cell_list_to_csv(struct Cell *cell_list, int num_cells, char *filename)
         int count = 0;
         struct Cell current_cell = cell_list[i];
         while (current_cell.particle_ids[count] != -1) {
-            fprintf(file, "%d,%d,%f,%f,%f\n", i, current_cell.particle_id[count],
+            fprintf(file, "%d,%d,%f,%f,%f\n", i, current_cell.particle_ids[count],
                                                  current_cell.x[count],
                                                  current_cell.y[count],
                                                  current_cell.z[count]);

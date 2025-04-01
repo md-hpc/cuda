@@ -44,12 +44,12 @@ __global__ void timestep(float *particle_id, float *src_x, float *src_y, float *
     if (reference_particle_idx >= particle_count)
         return; 
 
-    // get reference particle postitions
+    // get reference particle positions
     float reference_x = src_x[reference_particle_idx]; 
     float reference_y = src_y[reference_particle_idx]; 
     float reference_z = src_z[reference_particle_idx]; 
 
-    // accumulate accelerations for every other particle
+    // accumulate accelerations for every other particle (i == 1)
     float ax = 0;
     float ay = 0;
     float az = 0;
