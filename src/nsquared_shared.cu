@@ -117,7 +117,7 @@ __global__ void timestep(float *particle_id, float *src_x, float *src_y, float *
 int main(int argc, char **argv) 
 {
     if (argc != 3) {
-        printf("Usage: ./nsquared <input_file> <output_file>\n");
+        printf("Usage: ./nsquared_shared <input_file> <output_file>\n");
         return 1; 
     }
     
@@ -213,7 +213,7 @@ int main(int argc, char **argv)
         temp.tv_nsec = temp.tv_nsec + 1000000000;
     }
 
-    printf("nsquared,%f\n", ((double) temp.tv_sec) + (((double) temp.tv_nsec) * 1e-9));
+    printf("nsquared_shared,%f\n", ((double) temp.tv_sec) + (((double) temp.tv_nsec) * 1e-9));
 
     if (TIMESTEPS & 1) {
         GPU_PERROR(cudaMemcpy(host_x, device_x_2, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
