@@ -180,6 +180,7 @@ int main(int argc, char **argv)
     float *vx;
     float *vy;
     float *vz;
+    float *accelerations;
 
     import_atoms(input_file, &host_particle_ids, &host_x, &host_y, &host_z, &particle_count);
 
