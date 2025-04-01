@@ -8,11 +8,10 @@ extern "C" {
 #include <curand.h>
 #include <assert.h>
 
-#define MAX_PARTICLES_PER_BLOCK 32
-//#define EPSILON (1.65e-9)                       // ng * m^2 / s^2
-#define EPSILON (1.65e11)                        // ng * A^2 / s^2
+#define MAX_PARTICLES_PER_BLOCK 1024
+#define EPSILON (1.65e11)                       // ng * A^2 / s^2 originally (1.65e-9)
 #define ARGON_MASS (39.948 * 1.66054e-15)       // ng
-#define SIGMA (0.034f)                           // A
+#define SIGMA (0.034f)                          // A
 #define GPU_PERROR(err) do {\
     if (err != cudaSuccess) {\
         fprintf(stderr,"gpu_perror: %s %s %d\n", cudaGetErrorString(err), __FILE__, __LINE__);\
@@ -25,7 +24,9 @@ constexpr float LJMAX = (4.0f * 24.0f * EPSILON / SIGMA * (0.216344308307f - 2.0
 
 __device__ float compute_acceleration(float r_angstrom) {
         // in A / s^2
-        float temp = powf(SIGMA / r_angstrom, 6); // DON't USE POWF - do the multiplies explicitly
+        float temp = SIGMA / r_angstrom;
+        temp = temp * temp;
+        temp = temp * temp * temp;
         float acceleration = 24 * EPSILON * (2 * temp * temp - temp) / (r_angstrom * ARGON_MASS);
         //float force = 4 * EPSILON * (12 * pow(SIGMA, 12.0f) / pow(r, 13.0f) - 6 * pow(SIGMA, 6.0f) / pow(r, 7.0f)) / ARGON_MASS;
 
@@ -36,6 +37,7 @@ __global__ void timestep(float *particle_id, float *src_x, float *src_y, float *
                          float *vx, float *vy, float *vz, float *dst_x, float *dst_y,
                          float *dst_z, int particle_count)
 {
+    // initialize shared memory - shared between threads in each block
     __shared__ float shared_id[MAX_PARTICLES_PER_BLOCK];
     __shared__ float shared_x[MAX_PARTICLES_PER_BLOCK];
     __shared__ float shared_y[MAX_PARTICLES_PER_BLOCK];
@@ -44,19 +46,20 @@ __global__ void timestep(float *particle_id, float *src_x, float *src_y, float *
     // each thread gets a particle as a reference particle
     int reference_particle_idx = blockIdx.x * blockDim.x + threadIdx.x;
     
+    // extra threads can exit
     if (reference_particle_idx >= particle_count)
         return; 
 
+    // get reference particle positions and id
     float reference_particle_id = particle_id[reference_particle_idx];
     float reference_x = src_x[reference_particle_idx]; 
     float reference_y = src_y[reference_particle_idx]; 
     float reference_z = src_z[reference_particle_idx]; 
 
+    // accumulate accelerations for every other particle
     float ax = 0;
     float ay = 0;
     float az = 0;
-
-    // accumulate accelerations for every other particle
     for (int i = 0; i < particle_count; i += MAX_PARTICLES_PER_BLOCK) {
         shared_id[threadIdx.x] = particle_id[i + threadIdx.x];
         shared_x[threadIdx.x] = src_x[i + threadIdx.x];
@@ -65,18 +68,21 @@ __global__ void timestep(float *particle_id, float *src_x, float *src_y, float *
         //__syncthreads();
 
         for (int j = 0; j < MAX_PARTICLES_PER_BLOCK; ++j) {
+            // dont calculate acceleration with itself
             if (shared_id[(threadIdx.x + j) % MAX_PARTICLES_PER_BLOCK] == reference_particle_id)
                 continue;
-
+            // get neighbor particle positions from shared memory
             float neighbor_x = shared_x[(threadIdx.x + j) % MAX_PARTICLES_PER_BLOCK];
             float neighbor_y = shared_y[(threadIdx.x + j) % MAX_PARTICLES_PER_BLOCK];
             float neighbor_z = shared_z[(threadIdx.x + j) % MAX_PARTICLES_PER_BLOCK];
-
+            // use temp variables to optimize
             float diff_x = reference_x - neighbor_x;
             float diff_y = reference_y - neighbor_y;
             float diff_z = reference_z - neighbor_z;
+            // get norm for acceleration calculation
             float norm = sqrtf((diff_x * diff_x) + (diff_y * diff_y) + (diff_z * diff_z));
-            
+
+            // compute scalar acceleration and apply to xyz directions 
             float acceleration = compute_acceleration(norm);
             ax += acceleration * (reference_x - neighbor_x) / norm;
             ay += acceleration * (reference_y - neighbor_y) / norm;
@@ -106,6 +112,7 @@ __global__ void timestep(float *particle_id, float *src_x, float *src_y, float *
     z += ((z < 0) - (z > UNIVERSE_LENGTH)) * UNIVERSE_LENGTH;
     reference_z = z;
 
+    // write velocity and positions of particle back to global memory
     vx[reference_particle_idx] = reference_vx;
     vy[reference_particle_idx] = reference_vy;
     vz[reference_particle_idx] = reference_vz;

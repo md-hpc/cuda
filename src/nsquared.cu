@@ -9,10 +9,9 @@ extern "C" {
 #include <assert.h>
 
 #define MAX_PARTICLES_PER_BLOCK 1024
-//#define EPSILON (1.65e-9)                       // ng * m^2 / s^2
-#define EPSILON (1.65e11)                        // ng * A^2 / s^2
+#define EPSILON (1.65e11)                       // ng * A^2 / s^2 originally (1.65e-9)
 #define ARGON_MASS (39.948 * 1.66054e-15)       // ng
-#define SIGMA (0.034f)                           // A
+#define SIGMA (0.034f)                          // A
 #define GPU_PERROR(err) do {\
     if (err != cudaSuccess) {\
         fprintf(stderr,"gpu_perror: %s %s %d\n", cudaGetErrorString(err), __FILE__, __LINE__);\
@@ -20,12 +19,14 @@ extern "C" {
     }\
 } while (0);
 
-// constexpr float LJMAX = (4.0f * 24.0f * EPSILON / SIGMA * (powf(7.0f / 26.0f, 7.0f / 6.0f) - 2.0f * powf(7.0f / 26.0f, 13.0f / 6.0f)));
+// (4.0f * 24.0f * EPSILON / SIGMA * (powf(7.0f / 26.0f, 7.0f / 6.0f) - 2.0f * powf(7.0f / 26.0f, 13.0f / 6.0f)));
 constexpr float LJMAX = (4.0f * 24.0f * EPSILON / SIGMA * (0.216344308307f - 2.0f * 0.0582465445441f));
 
 __device__ float compute_acceleration(float r_angstrom) {
         // in A / s^2
-        float temp = powf(SIGMA / r_angstrom, 6); // DON't USE POWF - do the multiplies explicitly
+        float temp = SIGMA / r_angstrom;
+        temp = temp * temp;
+        temp = temp * temp * temp;
         float acceleration = 24 * EPSILON * (2 * temp * temp - temp) / (r_angstrom * ARGON_MASS);
         //float force = 4 * EPSILON * (12 * pow(SIGMA, 12.0f) / pow(r, 13.0f) - 6 * pow(SIGMA, 6.0f) / pow(r, 7.0f)) / ARGON_MASS;
 
@@ -38,39 +39,43 @@ __global__ void timestep(float *particle_id, float *src_x, float *src_y, float *
 {
     // each thread gets a particle as a reference particle
     int reference_particle_idx = blockIdx.x * blockDim.x + threadIdx.x;
-    
+
+    // extra threads can exit 
     if (reference_particle_idx >= particle_count)
         return; 
 
+    // get reference particle postitions
     float reference_x = src_x[reference_particle_idx]; 
     float reference_y = src_y[reference_particle_idx]; 
     float reference_z = src_z[reference_particle_idx]; 
 
+    // accumulate accelerations for every other particle
     float ax = 0;
     float ay = 0;
     float az = 0;
-
-    // accumulate accelerations for every other particle
     for (int i = 1; i < particle_count; ++i) {
         float neighbor_x = src_x[(reference_particle_idx + i) % particle_count]; 
         float neighbor_y = src_y[(reference_particle_idx + i) % particle_count]; 
         float neighbor_z = src_z[(reference_particle_idx + i) % particle_count]; 
-
+        // use temp variables to optimize
         float diff_x = reference_x - neighbor_x;
         float diff_y = reference_y - neighbor_y;
         float diff_z = reference_z - neighbor_z;
+        // get norm for acceleration calculation
         float norm = sqrtf((diff_x * diff_x) + (diff_y * diff_y) + (diff_z * diff_z));
-        
+
+        // compute scalar acceleration and apply to xyz directions 
         float acceleration = compute_acceleration(norm);
         ax += acceleration * (reference_x - neighbor_x) / norm;
         ay += acceleration * (reference_y - neighbor_y) / norm;
         az += acceleration * (reference_z - neighbor_z) / norm;
     }
 
-    // calculate velocity for reference particle
+    // obtain current velocity of reference particle
     float reference_vx = vx[reference_particle_idx]; 
     float reference_vy = vy[reference_particle_idx]; 
     float reference_vz = vz[reference_particle_idx]; 
+    // calculate velocity for reference particle
     reference_vx += ax * TIMESTEP_DURATION_FS;
     reference_vy += ay * TIMESTEP_DURATION_FS;
     reference_vz += az * TIMESTEP_DURATION_FS;
@@ -88,6 +93,7 @@ __global__ void timestep(float *particle_id, float *src_x, float *src_y, float *
     z += ((z < 0) - (z > UNIVERSE_LENGTH)) * UNIVERSE_LENGTH;
     reference_z = z;
 
+    // write velocity and positions of particle back to global memory
     vx[reference_particle_idx] = reference_vx;
     vy[reference_particle_idx] = reference_vy;
     vz[reference_particle_idx] = reference_vz;

@@ -58,38 +58,45 @@ int import_atoms(char *filename, int **particle_ids, float **x, float **y, float
 }
 
 // TOOD: update to work will x y z arrays rather than particle structs
-void create_cell_list(struct Particle *particle_list, int particle_count,
-                      struct Cell *cell_list, int cell_cutoff_radius)
+void create_cell_list(const int *particle_ids, const float *x, const float *y, const float *z,
+                      int particle_count, struct Cell *cell_list, int cell_cutoff_radius)
 {
     int free_idx[CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z] = {0};
     int cell_idx;
 
     for (int i = 0; i < particle_count; ++i) {
-        int x_cell = particle_list[i].x / cell_cutoff_radius;
-        int y_cell = particle_list[i].y / cell_cutoff_radius;
-        int z_cell = particle_list[i].z / cell_cutoff_radius;
-	if (x_cell >= 0 && x_cell < CELL_LENGTH_X && y_cell >= 0 && y_cell < CELL_LENGTH_Y && z_cell >= 0 && z_cell < CELL_LENGTH_Z) {
-		cell_idx = x_cell + y_cell * CELL_LENGTH_X + z_cell * CELL_LENGTH_X * CELL_LENGTH_Y;
-		if (cell_idx >= 0 && cell_idx < CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z) {
-			if (free_idx[cell_idx] < MAX_PARTICLES_PER_CELL) {
-				cell_list[cell_idx].particle_list[free_idx[cell_idx]++] = particle_list[i];
-			} else {
-				printf("Warning: Cell %d is full, particle %d cannot be added\n", cell_idx, i);
-										            }
-		} else {
-			printf("Error: Computed cell_idx %d is out of bounds\n", cell_idx);
-							    }
-	} else {
-		printf("Error: Particle %d is out of bounds: (%.2f, %.2f, %.2f)\n", i, particle_list[i].x, particle_list[i].y, particle_list[i].z);
-	}
+        int x_cell = x[i] / cell_cutoff_radius;
+        int y_cell = y[i] / cell_cutoff_radius;
+        int z_cell = z[i] / cell_cutoff_radius;
+        if (x_cell >= 0 && x_cell < CELL_LENGTH_X && y_cell >= 0 && y_cell < CELL_LENGTH_Y && z_cell >= 0 && z_cell < CELL_LENGTH_Z) {
+            cell_idx = x_cell + y_cell * CELL_LENGTH_X + z_cell * CELL_LENGTH_X * CELL_LENGTH_Y;
+            if (cell_idx >= 0 && cell_idx < CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z) {
+                int free_slot = free_idx[cell_idx];
+                if (free_slot < MAX_PARTICLES_PER_CELL) {
+                    cell_list[cell_idx].particle_ids[free_slot] = particle_ids[i];
 
+                    cell_list[cell_idx].x[free_slot] = x[i];
+                    cell_list[cell_idx].y[free_slot] = y[i];
+                    cell_list[cell_idx].z[free_slot] = z[i];
 
+                    cell_list[cell_idx].vx[free_slot] = 0;
+                    cell_list[cell_idx].vy[free_slot] = 0;
+                    cell_list[cell_idx].vz[free_slot] = 0;
 
-        cell_list[cell_idx].particle_list[free_idx[cell_idx]++] = particle_list[i];
+                    free_idx[cell_idx]++;
+                } else {
+                    printf("Warning: Cell %d is full, particle %d cannot be added\n", cell_idx, i);
+                }
+            } else {
+                printf("Error: Computed cell_idx %d is out of bounds\n", cell_idx);
+            }
+        } else {
+            printf("Error: Particle %d is out of bounds: (%.2f, %.2f, %.2f)\n", i, x[i], y[i], z[i]);
+	    }
     }
 
     for (int i = 0; i < CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z; ++i) {
-        memset(&cell_list[i].particle_list[free_idx[i]], -1, (MAX_PARTICLES_PER_CELL - free_idx[i]) * sizeof(struct Particle));
+        memset(&cell_list[i].particle_idx[free_idx[i]], -1, (MAX_PARTICLES_PER_CELL - free_idx[i]) * sizeof(int));
     }
 }
 
@@ -102,12 +109,11 @@ void cell_list_to_csv(struct Cell *cell_list, int num_cells, char *filename)
     for (int i = 0; i < num_cells; ++i) {
         int count = 0;
         struct Cell current_cell = cell_list[i];
-        while (current_cell.particle_list[count].particle_id != -1) {
-            fprintf(file, "%d,%d,%f,%f,%f\n", i,
-                                             current_cell.particle_list[count].particle_id,
-                                             current_cell.particle_list[count].x,
-                                             current_cell.particle_list[count].y,
-                                             current_cell.particle_list[count].z);
+        while (current_cell.particle_ids[count] != -1) {
+            fprintf(file, "%d,%d,%f,%f,%f\n", i, current_cell.particle_id[count],
+                                                 current_cell.x[count],
+                                                 current_cell.y[count],
+                                                 current_cell.z[count]);
             count++;
         }
     }

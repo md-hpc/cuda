@@ -4,18 +4,14 @@
 #define MAX_PARTICLES_PER_CELL 128
 
 
-struct Particle {
-    int particle_id;
-    float x;
-    float y;
-    float z;
-    float vx;
-    float vy;
-    float vz;
-};
-
 struct Cell {
-    struct Particle particle_list[MAX_PARTICLES_PER_CELL];
+    int particle_ids[MAX_PARTICLES_PER_CELL];
+    float x[MAX_PARTICLES_PER_CELL];
+    float y[MAX_PARTICLES_PER_CELL];
+    float z[MAX_PARTICLES_PER_CELL];
+    float vx[MAX_PARTICLES_PER_CELL];
+    float vy[MAX_PARTICLES_PER_CELL];
+    float vz[MAX_PARTICLES_PER_CELL];
 };
 
 // TODO: update
@@ -30,6 +26,7 @@ struct Cell {
  */
 int import_atoms(char *filename, int **particle_ids, float **x, float **y, float **z, int *particle_count);
 
+// TODO: update
 /**
  * @brief Assigns particles to a spatial cell grid based on their positions.
  *
@@ -45,8 +42,8 @@ int import_atoms(char *filename, int **particle_ids, float **x, float **y, float
  *       with defined x, y, and z coordinates. Additionally, the `cell_list` must
  *       have sufficient memory allocated to store the particles.
  */
-void create_cell_list(struct Particle *particle_list, int particle_count,
-                      struct Cell *cell_list, int cell_cutoff_radius);
+void create_cell_list(const int *particle_ids, const float *x, const float *y, const float *z,
+                      int particle_count, struct Cell *cell_list, int cell_cutoff_radius);
 
 void cell_list_to_csv(struct Cell *cell_list, int num_cells, char *filename);
 

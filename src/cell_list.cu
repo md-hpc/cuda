@@ -20,12 +20,13 @@ extern "C" {
 
 __device__ float compute_acceleration(float r_angstrom) {
         // in A / s^2
-        float temp = (SIGMA / r_angstrom) * (SIGMA / r_angstrom) * (SIGMA / r_angstrom) * (SIGMA / r_angstrom) * (SIGMA / r_angstrom) * (SIGMA / r_angstrom);
+        float temp = SIGMA / r_angstrom;
+        temp = temp * temp;
+        temp = temp * temp * temp;
         float acceleration = 24 * EPSILON * (2 * temp * temp - temp) / (r_angstrom * ARGON_MASS);
         //float force = 4 * EPSILON * (12 * pow(SIGMA, 12.0f) / pow(r, 13.0f) - 6 * pow(SIGMA, 6.0f) / pow(r, 7.0f)) / ARGON_MASS;
 
-        //return (force < LJMIN) * LJMIN + !(force < LJMIN) * force;
-        return acceleration;
+        return (acceleration < LJMAX) * LJMAX + !(acceleration < LJMAX) * acceleration;
 }
 
 __global__ void force_eval(struct Cell *cell_list, float *accelerations)
