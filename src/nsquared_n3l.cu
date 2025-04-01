@@ -88,9 +88,9 @@ __global__ void calculate_accelerations(float *particle_id, float *src_x, float 
             az += daz;
 
             if (reference_particle_id < shared_id[jj]) {
-                accelerations[accelerations_block_idx + jj * 3] -= dax;
-                accelerations[accelerations_block_idx + jj * 3 + 1] -= day;
-                accelerations[accelerations_block_idx + jj * 3 + 2] -= daz;
+                accelerations[accelerations_block_idx + (i + jj) * 3] -= dax;
+                accelerations[accelerations_block_idx + (i + jj) * 3 + 1] -= day;
+                accelerations[accelerations_block_idx + (i + jj) * 3 + 2] -= daz;
             }
         }
         //__syncthreads();
