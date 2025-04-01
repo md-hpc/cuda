@@ -36,6 +36,7 @@ __global__ void timestep(float *particle_id, float *src_x, float *src_y, float *
                          float *vx, float *vy, float *vz, float *dst_x, float *dst_y,
                          float *dst_z, int particle_count)
 {
+    __shared__ float shared_id[MAX_PARTICLES_PER_BLOCK];
     __shared__ float shared_x[MAX_PARTICLES_PER_BLOCK];
     __shared__ float shared_y[MAX_PARTICLES_PER_BLOCK];
     __shared__ float shared_z[MAX_PARTICLES_PER_BLOCK];
@@ -46,6 +47,7 @@ __global__ void timestep(float *particle_id, float *src_x, float *src_y, float *
     if (reference_particle_idx >= particle_count)
         return; 
 
+    float reference_particle_id = particle_id[reference_particle_idx];
     float reference_x = src_x[reference_particle_idx]; 
     float reference_y = src_y[reference_particle_idx]; 
     float reference_z = src_z[reference_particle_idx]; 
@@ -56,12 +58,16 @@ __global__ void timestep(float *particle_id, float *src_x, float *src_y, float *
 
     // accumulate accelerations for every other particle
     for (int i = 0; i < particle_count; i += MAX_PARTICLES_PER_BLOCK) {
+        shared_id[threadIdx.x] = particle_id[i + threadIdx.x];
         shared_x[threadIdx.x] = src_x[i + threadIdx.x];
         shared_y[threadIdx.x] = src_y[i + threadIdx.x];
         shared_z[threadIdx.x] = src_z[i + threadIdx.x];
         __syncthreads();
 
         for (int j = 0; j < MAX_PARTICLES_PER_BLOCK; ++j) {
+            if (shared_id == reference_particle_id)
+                continue;
+
             float neighbor_x = shared_x[(threadIdx.x + j) % MAX_PARTICLES_PER_BLOCK];
             float neighbor_y = shared_y[(threadIdx.x + j) % MAX_PARTICLES_PER_BLOCK];
             float neighbor_z = shared_z[(threadIdx.x + j) % MAX_PARTICLES_PER_BLOCK];
