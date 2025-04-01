@@ -65,7 +65,7 @@ __global__ void timestep(float *particle_id, float *src_x, float *src_y, float *
         __syncthreads();
 
         for (int j = 0; j < MAX_PARTICLES_PER_BLOCK; ++j) {
-            if (shared_id[threadIdx.x] == reference_particle_id)
+            if (shared_id[(threadIdx.x + j) % MAX_PARTICLES_PER_BLOCK] == reference_particle_id)
                 continue;
 
             float neighbor_x = shared_x[(threadIdx.x + j) % MAX_PARTICLES_PER_BLOCK];
