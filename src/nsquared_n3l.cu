@@ -44,11 +44,13 @@ __global__ void calculate_accelerations(float *particle_id, float *src_x, float 
 
     // each thread gets a particle as a reference particle
     int reference_particle_idx = blockIdx.x * blockDim.x + threadIdx.x;
-    
+
+    // extra threads can exit 
     if (reference_particle_idx >= particle_count)
         return; 
 
-    const int accelerations_block_idx = blockIdx.x * particle_count * sizeof(float) * 3;
+    // calculate acceleration block index depending on block index
+    const int accelerations_block_idx = blockIdx.x * particle_count * 3;
 
     float reference_particle_id = particle_id[reference_particle_idx];
     float reference_x = src_x[reference_particle_idx]; 

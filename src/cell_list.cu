@@ -77,34 +77,34 @@ __global__ void force_eval(struct Cell *cell_list, float *accelerations)
     int neighbor_idx = neighbor_x + neighbor_y * CELL_LENGTH_X + neighbor_z * CELL_LENGTH_X * CELL_LENGTH_Y;
 
     __shared__ struct Cell neighbor_cell;
-    neighbor_cell.particle_list[threadIdx.x].particle_id = cell_list[neighbor_idx].particle_list[threadIdx.x].particle_id;
-    neighbor_cell.particle_list[threadIdx.x].x = cell_list[neighbor_idx].particle_list[threadIdx.x].x;
-    neighbor_cell.particle_list[threadIdx.x].y = cell_list[neighbor_idx].particle_list[threadIdx.x].y;
-    neighbor_cell.particle_list[threadIdx.x].z = cell_list[neighbor_idx].particle_list[threadIdx.x].z;
+    neighbor_cell.particle_id[threadIdx.x] = cell_list[neighbor_idx].particle_id[threadIdx.x];
+    neighbor_cell.x[threadIdx.x] = cell_list[neighbor_idx].x[threadIdx.x];
+    neighbor_cell.y[threadIdx.x] = cell_list[neighbor_idx].y[threadIdx.x];
+    neighbor_cell.z[threadIdx.x] = cell_list[neighbor_idx].z[threadIdx.x];
 
     if (blockIdx.x != neighbor_idx) {
         if (home_x - neighbor_x == CELL_LENGTH_X - 1)
-            neighbor_cell.particle_list[threadIdx.x].x += (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST);
+            neighbor_cell.x[threadIdx.x] += (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST);
         else if (neighbor_x - home_x == CELL_LENGTH_X - 1)
-            neighbor_cell.particle_list[threadIdx.x].x -= (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST);
+            neighbor_cell.x[threadIdx.x] -= (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST);
         if (home_y - neighbor_y == CELL_LENGTH_Y - 1)
-            neighbor_cell.particle_list[threadIdx.x].y += (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST);
+            neighbor_cell.y[threadIdx.x] += (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST);
         else if (neighbor_y - home_y == CELL_LENGTH_Y - 1)
-            neighbor_cell.particle_list[threadIdx.x].y -= (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST);
+            neighbor_cell.y[threadIdx.x] -= (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST);
         if (home_z - neighbor_z == CELL_LENGTH_Z - 1)
-            neighbor_cell.particle_list[threadIdx.x].z += (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST);
+            neighbor_cell.z[threadIdx.x] += (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST);
         else if (neighbor_z - home_z == CELL_LENGTH_Z - 1)
-            neighbor_cell.particle_list[threadIdx.x].z -= (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST);
+            neighbor_cell.z[threadIdx.x] -= (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST);
     }
 
-    if (cell_list[blockIdx.x].particle_list[threadIdx.x].particle_id == -1)
+    if (cell_list[blockIdx.x].particle_id[threadIdx.x] == -1)
         return;
 
     __syncthreads();
 
-    float reference_particle_x = cell_list[blockIdx.x].particle_list[threadIdx.x].x;
-    float reference_particle_y = cell_list[blockIdx.x].particle_list[threadIdx.x].y;
-    float reference_particle_z = cell_list[blockIdx.x].particle_list[threadIdx.x].z;
+    float reference_x = cell_list[blockIdx.x].x[threadIdx.x];
+    float reference_y = cell_list[blockIdx.x].y[threadIdx.x];
+    float reference_z = cell_list[blockIdx.x].z[threadIdx.x];
 
     float reference_particle_ax = 0;
     float reference_particle_ay = 0;
@@ -112,29 +112,22 @@ __global__ void force_eval(struct Cell *cell_list, float *accelerations)
 
     // TODO: consider the situation where home = neighbor
     for (int i = 0; i < MAX_PARTICLES_PER_CELL; ++i) {
-        if (neighbor_cell.particle_list[i].particle_id == -1)
+        if (neighbor_cell.particle_id[i] == -1)
             break;
 
-        float neighbor_particle_x = neighbor_cell.particle_list[i].x;
-        float neighbor_particle_y = neighbor_cell.particle_list[i].y;
-        float neighbor_particle_z = neighbor_cell.particle_list[i].z;
+        if (neighbor_cell.particle_id[i] == cell_list[blockIdx.x].particle_ids[threadIdx.x])
+            continue;
 
-        float norm = sqrtf(
-            (reference_particle_x - neighbor_particle_x) * (reference_particle_x - neighbor_particle_x) +
-            (reference_particle_y - neighbor_particle_y) * (reference_particle_y - neighbor_particle_y) +
-            (reference_particle_z - neighbor_particle_z) * (reference_particle_z - neighbor_particle_z)
-        );
+        float diff_x = reference_x - neighbor_cell.x[i];
+        float diff_y = reference_y - neighbor_cell.y[i];
+        float diff_z = reference_z - neighbor_cell.z[i];
 
-        if (norm != 0) {
-            float acceleration = compute_acceleration(norm);
-            float ax = acceleration * reference_particle_x / norm;
-            float ay = acceleration * reference_particle_y / norm;
-            float az = acceleration * reference_particle_z / norm;
+        float norm = sqrtf((diff_x * diff_x) + (diff_y * diff_y) + (diff_z * diff_z));
 
-            reference_particle_ax += ax;
-            reference_particle_ay += ay;
-            reference_particle_az += az;
-        }
+        float acceleration = compute_acceleration(norm);
+        reference_particle_ax += acceleration * diff_x / norm;
+        reference_particle_ay += acceleration * diff_y / norm;
+        reference_particle_az += acceleration * diff_z / norm;
     }
 
     int accelerations_block_idx = ((blockIdx.x * 27 + blockIdx.y) * MAX_PARTICLES_PER_CELL + threadIdx.x) * 3;
@@ -225,26 +218,34 @@ int main(int argc, char **argv)
 	    return 1;
     }
 
+    char *input_file = argv[1];
+    char *output_file = argv[2];
+
     int particle_count;
-    struct Particle *particle_list;
-    struct Cell cell_list[CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z];
-    struct Cell *device_cell_list1;
-    struct Cell *device_cell_list2;
+
+    int *host_particle_ids = NULL;
+    float *host_x = NULL;
+    float *host_y = NULL;
+    float *host_z = NULL;
+    struct Cell host_cell_list[CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z];
+
+    struct Cell *device_cell_list_1;
+    struct Cell *device_cell_list_1;
     float *accelerations;
 
-    import_atoms(argv[1], &particle_list, &particle_count);
-    create_cell_list(particle_list, particle_count, cell_list, CELL_CUTOFF_RADIUS_ANGST);
-    GPU_PERROR(cudaMalloc(&device_cell_list1, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell)));
-    GPU_PERROR(cudaMalloc(&device_cell_list2, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell)));
+    import_atoms(input_file, &host_particle_ids, &host_x, &host_y, &host_z, &particle_count);
+    create_cell_list(host_particle_ids, host_x, host_y, host_z, particle_count, host_cell_list, CELL_CUTOFF_RADIUS_ANGST);
+
+    GPU_PERROR(cudaMalloc(&device_cell_list_1, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell)));
+    GPU_PERROR(cudaMalloc(&device_cell_list_2, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell)));
     GPU_PERROR(cudaMalloc(&accelerations, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * 27 * MAX_PARTICLES_PER_CELL * 3 * sizeof(float)));
-    GPU_PERROR(cudaMemcpy(device_cell_list1, cell_list, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyHostToDevice));
+    GPU_PERROR(cudaMemcpy(device_cell_list_1, host_cell_list, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyHostToDevice));
 
     dim3 numBlocksCalculate(CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z, 27);
     dim3 numBlocksUpdate(CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z);
     dim3 threadsPerBlock(MAX_PARTICLES_PER_CELL);
 
 #ifdef SIMULATE
-    char *output_file = argv[2];
     FILE *out = fopen(output_file, "w");
     fprintf(out, "particle_id,x,y,z\n");
 #endif
@@ -259,18 +260,18 @@ int main(int argc, char **argv)
     for (t = 0; t < TIMESTEPS; ++t) {
         GPU_PERROR(cudaMemset(accelerations, 0, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * 27 * MAX_PARTICLES_PER_CELL * 3 * sizeof(float)));
         if (t & 1 == 0) {
-            force_eval<<<numBlocksCalculate, threadsPerBlock>>>(device_cell_list1, accelerations);
-            particle_update<<<numBlocksUpdate, threadsPerBlock>>>(device_cell_list1, accelerations);
-            motion_update<<<numBlocksUpdate, threadsPerBlock>>>(device_cell_list1, device_cell_list2);
+            force_eval<<<numBlocksCalculate, threadsPerBlock>>>(device_cell_list_1, accelerations);
+            particle_update<<<numBlocksUpdate, threadsPerBlock>>>(device_cell_list_1, accelerations);
+            motion_update<<<numBlocksUpdate, threadsPerBlock>>>(device_cell_list_1, device_cell_list2);
 #ifdef SIMULATE
-            GPU_PERROR(cudaMemcpy(cell_list, device_cell_list2, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
+            GPU_PERROR(cudaMemcpy(host_cell_list, device_cell_list_2, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
 #endif
         } else {
-            force_eval<<<numBlocksCalculate, threadsPerBlock>>>(device_cell_list2, accelerations);
-            particle_update<<<numBlocksUpdate, threadsPerBlock>>>(device_cell_list2, accelerations);
-            motion_update<<<numBlocksUpdate, threadsPerBlock>>>(device_cell_list2, device_cell_list1);
+            force_eval<<<numBlocksCalculate, threadsPerBlock>>>(device_cell_list_2, accelerations);
+            particle_update<<<numBlocksUpdate, threadsPerBlock>>>(device_cell_list_2, accelerations);
+            motion_update<<<numBlocksUpdate, threadsPerBlock>>>(device_cell_list_2, device_cell_list1);
 #ifdef SIMULATE
-            GPU_PERROR(cudaMemcpy(cell_list, device_cell_list1, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
+            GPU_PERROR(cudaMemcpy(host_cell_list, device_cell_list_1, particle_count * sizeof(struct Particle), cudaMemcpyDeviceToHost));
 #endif
         }
 #ifdef SIMULATE
@@ -279,12 +280,12 @@ int main(int argc, char **argv)
                 for (int z = 0; z < CELL_LENGTH_Z; ++z) {
                     int count = 0;
                     struct Cell current_cell = cell_list[x + y * CELL_LENGTH_X + z * CELL_LENGTH_X * CELL_LENGTH_Y];
-                    while (count < MAX_PARTICLES_PER_CELL && current_cell.particle_list[count].particle_id != -1) {
+                    while (count < MAX_PARTICLES_PER_CELL && current_cell.particle_id[count] != -1) {
                         fprintf(out, "%d,%d,%f,%f,%f\n", x + y * CELL_LENGTH_X + z * CELL_LENGTH_X * CELL_LENGTH_Y,
-                                                        current_cell.particle_list[count].particle_id,
-                                                        current_cell.particle_list[count].x,
-                                                        current_cell.particle_list[count].y,
-                                                        current_cell.particle_list[count].z);
+                                                        current_cell.particle_id[count],
+                                                        current_cell.x[count],
+                                                        current_cell.y[count],
+                                                        current_cell.z[count]);
                         count++;
                     }
                 }
@@ -308,12 +309,12 @@ int main(int argc, char **argv)
     printf("cell_list,%f\n", ((double) temp.tv_sec) + (((double) temp.tv_nsec) * 1e-9));
 
     if (t & 1) {
-        GPU_PERROR(cudaMemcpy(cell_list, device_cell_list2, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyDeviceToHost));
+        GPU_PERROR(cudaMemcpy(host_cell_list, device_cell_list_2, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyDeviceToHost));
     } else {
-        GPU_PERROR(cudaMemcpy(cell_list, device_cell_list1, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyDeviceToHost));
+        GPU_PERROR(cudaMemcpy(host_cell_list, device_cell_list_1, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyDeviceToHost));
     }
 
-    FILE *out = fopen(argv[2], "w");
+    FILE *out = fopen(output_file, "w");
     fprintf(out, "cell_idx,particle_id,x,y,z\n");
 
     for (int x = 0; x < CELL_LENGTH_X; ++x) {
@@ -321,12 +322,12 @@ int main(int argc, char **argv)
             for (int z = 0; z < CELL_LENGTH_Z; ++z) {
                 int count = 0;
                 struct Cell current_cell = cell_list[x + y * CELL_LENGTH_X + z * CELL_LENGTH_X * CELL_LENGTH_Y];
-                while (count < MAX_PARTICLES_PER_CELL && current_cell.particle_list[count].particle_id != -1) {
+                while (count < MAX_PARTICLES_PER_CELL && current_cell.particle_id[count] != -1) {
                     fprintf(out, "%d,%d,%f,%f,%f\n", x + y * CELL_LENGTH_X + z * CELL_LENGTH_X * CELL_LENGTH_Y,
-                                                     current_cell.particle_list[count].particle_id,
-                                                     current_cell.particle_list[count].x,
-                                                     current_cell.particle_list[count].y,
-                                                     current_cell.particle_list[count].z);
+                                                     current_cell.particle_id[count],
+                                                     current_cell.x[count],
+                                                     current_cell.y[count],
+                                                     current_cell.z[count]);
                     count++;
                 }
             }
@@ -334,6 +335,6 @@ int main(int argc, char **argv)
     }
 #endif
 
-    GPU_PERROR(cudaFree(device_cell_list1));
-    GPU_PERROR(cudaFree(device_cell_list2));
+    GPU_PERROR(cudaFree(device_cell_list_1));
+    GPU_PERROR(cudaFree(device_cell_list_2));
 }

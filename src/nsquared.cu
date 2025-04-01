@@ -54,21 +54,18 @@ __global__ void timestep(float *particle_id, float *src_x, float *src_y, float *
     float ay = 0;
     float az = 0;
     for (int i = 1; i < particle_count; ++i) {
-        float neighbor_x = src_x[(reference_particle_idx + i) % particle_count]; 
-        float neighbor_y = src_y[(reference_particle_idx + i) % particle_count]; 
-        float neighbor_z = src_z[(reference_particle_idx + i) % particle_count]; 
         // use temp variables to optimize
-        float diff_x = reference_x - neighbor_x;
-        float diff_y = reference_y - neighbor_y;
-        float diff_z = reference_z - neighbor_z;
+        float diff_x = reference_x - src_x[(reference_particle_idx + i) % particle_count];
+        float diff_y = reference_y - src_y[(reference_particle_idx + i) % particle_count];
+        float diff_z = reference_z - src_z[(reference_particle_idx + i) % particle_count];
         // get norm for acceleration calculation
         float norm = sqrtf((diff_x * diff_x) + (diff_y * diff_y) + (diff_z * diff_z));
 
         // compute scalar acceleration and apply to xyz directions 
         float acceleration = compute_acceleration(norm);
-        ax += acceleration * (reference_x - neighbor_x) / norm;
-        ay += acceleration * (reference_y - neighbor_y) / norm;
-        az += acceleration * (reference_z - neighbor_z) / norm;
+        ax += acceleration * diff_x / norm;
+        ay += acceleration * diff_y / norm;
+        az += acceleration * diff_z / norm;
     }
 
     // obtain current velocity of reference particle
