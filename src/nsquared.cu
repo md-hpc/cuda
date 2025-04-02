@@ -20,8 +20,8 @@ extern "C" {
     }\
 } while (0);
 
-#define R_MIN (0.0313796173693)
-#define LJMAX_ACCELERATION (30.2875795255)
+#define R_MIN (0.0317782790163)
+#define LJMAX_ACCELERATION (24.7987876375)
 //constexpr float LJMAX = (4.0f * 24.0f * EPSILON / SIGMA * (0.216344308307f - 2.0f * 0.0582465445441f));
 
 __device__ float compute_acceleration(float r_angstrom) {
@@ -71,11 +71,10 @@ __global__ void timestep(float *particle_id, float *src_x, float *src_y, float *
         float norm = sqrtf((diff_x * diff_x) + (diff_y * diff_y) + (diff_z * diff_z));
 
         // compute scalar acceleration and apply to xyz directions 
-        float acceleration = compute_acceleration(norm);
-        ax += acceleration * diff_x / norm;
-        ay += acceleration * diff_y / norm;
-        az += acceleration * diff_z / norm;
-        assert(acceleration != INFINITY);
+        float acceleration = compute_acceleration(norm) / norm
+        ax += acceleration * diff_x;
+        ay += acceleration * diff_y;
+        az += acceleration * diff_z;
     }
 
     // obtain current velocity of reference particle
@@ -154,9 +153,9 @@ int main(int argc, char **argv)
     GPU_PERROR(cudaMemcpy(device_x_1, host_x, particle_count * sizeof(float), cudaMemcpyHostToDevice));
     GPU_PERROR(cudaMemcpy(device_y_1, host_x, particle_count * sizeof(float), cudaMemcpyHostToDevice));
     GPU_PERROR(cudaMemcpy(device_z_1, host_x, particle_count * sizeof(float), cudaMemcpyHostToDevice));
-    GPU_PERROR(cudaMemset(vx, 0f, particle_count * sizeof(float)));
-    GPU_PERROR(cudaMemset(vy, 0f, particle_count * sizeof(float)));
-    GPU_PERROR(cudaMemset(vz, 0f, particle_count * sizeof(float)));
+    GPU_PERROR(cudaMemset(vx, 0.0f, particle_count * sizeof(float)));
+    GPU_PERROR(cudaMemset(vy, 0.0f, particle_count * sizeof(float)));
+    GPU_PERROR(cudaMemset(vz, 0.0f, particle_count * sizeof(float)));
 
     // set parameters
     dim3 numBlocks((particle_count - 1) / MAX_PARTICLES_PER_BLOCK + 1);
