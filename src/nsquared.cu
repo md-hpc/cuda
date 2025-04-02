@@ -7,6 +7,7 @@ extern "C" {
 #include <stdlib.h>
 #include <curand.h>
 #include <assert.h>
+#include <math.h>
 
 #define MAX_PARTICLES_PER_BLOCK 1024
 #define EPSILON (1.65e11)                       // ng * A^2 / s^2 originally (1.65e-9)
@@ -19,18 +20,20 @@ extern "C" {
     }\
 } while (0);
 
-// (4.0f * 24.0f * EPSILON / SIGMA * (powf(7.0f / 26.0f, 7.0f / 6.0f) - 2.0f * powf(7.0f / 26.0f, 13.0f / 6.0f)));
-constexpr float LJMAX = (4.0f * 24.0f * EPSILON / SIGMA * (0.216344308307f - 2.0f * 0.0582465445441f));
+#define R_MIN (0.0313796173693)
+#define LJMAX_ACCELERATION (30.2875795255)
+//constexpr float LJMAX = (4.0f * 24.0f * EPSILON / SIGMA * (0.216344308307f - 2.0f * 0.0582465445441f));
 
 __device__ float compute_acceleration(float r_angstrom) {
+        if (r_angstrom < R_MIN)
+            return LJMAX_ACCELERATION;
+
         // in A / s^2
         float temp = SIGMA / r_angstrom;
         temp = temp * temp;
         temp = temp * temp * temp;
-        float acceleration = 24 * EPSILON * (2 * temp * temp - temp) / (r_angstrom * ARGON_MASS);
+        return 24 * EPSILON * (2 * temp * temp - temp) / (r_angstrom * ARGON_MASS);
         //float force = 4 * EPSILON * (12 * pow(SIGMA, 12.0f) / pow(r, 13.0f) - 6 * pow(SIGMA, 6.0f) / pow(r, 7.0f)) / ARGON_MASS;
-
-        return (acceleration < LJMAX) * LJMAX + !(acceleration < LJMAX) * acceleration;
 }
 
 __global__ void timestep(float *particle_id, float *src_x, float *src_y, float *src_z,
@@ -72,6 +75,7 @@ __global__ void timestep(float *particle_id, float *src_x, float *src_y, float *
         ax += acceleration * diff_x / norm;
         ay += acceleration * diff_y / norm;
         az += acceleration * diff_z / norm;
+        assert(acceleration != INFINITY);
     }
 
     // obtain current velocity of reference particle
@@ -135,7 +139,7 @@ int main(int argc, char **argv)
 
     import_atoms(input_file, &host_particle_ids, &host_x, &host_y, &host_z, &particle_count);
 
-    GPU_PERROR(cudaMalloc(&device_particle_ids, particle_count * sizeof(float)));
+    GPU_PERROR(cudaMalloc(&device_particle_ids, particle_count * sizeof(int)));
     GPU_PERROR(cudaMalloc(&device_x_1, particle_count * sizeof(float)));
     GPU_PERROR(cudaMalloc(&device_y_1, particle_count * sizeof(float)));
     GPU_PERROR(cudaMalloc(&device_z_1, particle_count * sizeof(float)));
@@ -146,13 +150,13 @@ int main(int argc, char **argv)
     GPU_PERROR(cudaMalloc(&vy, particle_count * sizeof(float)));
     GPU_PERROR(cudaMalloc(&vz, particle_count * sizeof(float)));
 
-    GPU_PERROR(cudaMemcpy(device_particle_ids, host_particle_ids, particle_count * sizeof(float), cudaMemcpyHostToDevice));
+    GPU_PERROR(cudaMemcpy(device_particle_ids, host_particle_ids, particle_count * sizeof(int), cudaMemcpyHostToDevice));
     GPU_PERROR(cudaMemcpy(device_x_1, host_x, particle_count * sizeof(float), cudaMemcpyHostToDevice));
     GPU_PERROR(cudaMemcpy(device_y_1, host_x, particle_count * sizeof(float), cudaMemcpyHostToDevice));
     GPU_PERROR(cudaMemcpy(device_z_1, host_x, particle_count * sizeof(float), cudaMemcpyHostToDevice));
-    GPU_PERROR(cudaMemset(vx, 0, particle_count * sizeof(float)));
-    GPU_PERROR(cudaMemset(vy, 0, particle_count * sizeof(float)));
-    GPU_PERROR(cudaMemset(vz, 0, particle_count * sizeof(float)));
+    GPU_PERROR(cudaMemset(vx, 0f, particle_count * sizeof(float)));
+    GPU_PERROR(cudaMemset(vy, 0f, particle_count * sizeof(float)));
+    GPU_PERROR(cudaMemset(vz, 0f, particle_count * sizeof(float)));
 
     // set parameters
     dim3 numBlocks((particle_count - 1) / MAX_PARTICLES_PER_BLOCK + 1);
