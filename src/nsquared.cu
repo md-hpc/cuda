@@ -58,6 +58,12 @@ __global__ void timestep(float *particle_id, float *src_x, float *src_y, float *
         float diff_x = reference_x - src_x[(reference_particle_idx + i) % particle_count];
         float diff_y = reference_y - src_y[(reference_particle_idx + i) % particle_count];
         float diff_z = reference_z - src_z[(reference_particle_idx + i) % particle_count];
+
+        // get new particle position differences taking into account periodic boundary conditions
+        diff_x += ((diff_x < -UNIVERSE_LENGTH / 2) - (diff_x > UNIVERSE_LENGTH / 2)) * UNIVERSE_LENGTH;
+        diff_y += ((diff_y < -UNIVERSE_LENGTH / 2) - (diff_y > UNIVERSE_LENGTH / 2)) * UNIVERSE_LENGTH;
+        diff_z += ((diff_z < -UNIVERSE_LENGTH / 2) - (diff_z > UNIVERSE_LENGTH / 2)) * UNIVERSE_LENGTH;
+
         // get norm for acceleration calculation
         float norm = sqrtf((diff_x * diff_x) + (diff_y * diff_y) + (diff_z * diff_z));
 
