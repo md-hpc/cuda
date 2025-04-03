@@ -109,9 +109,9 @@ __global__ void force_eval(const struct Cell *cell_list, float *accelerations)
     float reference_y = cell_list[blockIdx.x].y[threadIdx.x];
     float reference_z = cell_list[blockIdx.x].z[threadIdx.x];
 
-    float reference_particle_ax = 0;
-    float reference_particle_ay = 0;
-    float reference_particle_az = 0;
+    float reference_ax = 0;
+    float reference_ay = 0;
+    float reference_az = 0;
 
     // TODO: consider the situation where home = neighbor
     for (int i = 0; i < MAX_PARTICLES_PER_CELL; ++i) {
@@ -128,30 +128,30 @@ __global__ void force_eval(const struct Cell *cell_list, float *accelerations)
         float norm = sqrtf((diff_x * diff_x) + (diff_y * diff_y) + (diff_z * diff_z));
 
         float acceleration = compute_acceleration(norm) / norm;
-        reference_particle_ax += acceleration * diff_x;
-        reference_particle_ay += acceleration * diff_y;
-        reference_particle_az += acceleration * diff_z;
+        reference_ax += acceleration * diff_x;
+        reference_ay += acceleration * diff_y;
+        reference_az += acceleration * diff_z;
     }
 
     int accelerations_block_idx = ((blockIdx.x * 27 + blockIdx.y) * MAX_PARTICLES_PER_CELL + threadIdx.x) * 3;
-    accelerations[accelerations_block_idx] = reference_particle_ax;
-    accelerations[accelerations_block_idx + 1] = reference_particle_ay;
-    accelerations[accelerations_block_idx + 2] = reference_particle_az;
+    accelerations[accelerations_block_idx] = reference_ax;
+    accelerations[accelerations_block_idx + 1] = reference_ay;
+    accelerations[accelerations_block_idx + 2] = reference_az;
 
     return;
 }
 
 __global__ void particle_update(struct Cell *cell_list, float *accelerations)
 {
+    if (cell_list[blockIdx.x].particle_ids[threadIdx.x] == -1)
+        return;
+
     float reference_vx = cell_list[blockIdx.x].vx[threadIdx.x];
     float reference_vy = cell_list[blockIdx.x].vy[threadIdx.x];
     float reference_vz = cell_list[blockIdx.x].vz[threadIdx.x];
     float reference_x = cell_list[blockIdx.x].x[threadIdx.x];
     float reference_y = cell_list[blockIdx.x].y[threadIdx.x];
     float reference_z = cell_list[blockIdx.x].z[threadIdx.x];
-
-    if (cell_list[blockIdx.x].particle_ids[threadIdx.x] == -1)
-        return;
 
     float ax = 0;
     float ay = 0;
@@ -262,6 +262,7 @@ int main(int argc, char **argv)
 
     GPU_PERROR(cudaMalloc(&device_cell_list_1, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell)));
     GPU_PERROR(cudaMemcpy(device_cell_list_1, host_cell_list, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyHostToDevice));
+
     GPU_PERROR(cudaMalloc(&device_cell_list_2, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell)));
     GPU_PERROR(cudaMalloc(&accelerations, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * 27 * MAX_PARTICLES_PER_CELL * 3 * sizeof(float)));
 
@@ -332,7 +333,7 @@ int main(int argc, char **argv)
 
     printf("cell_list,%f\n", ((double) temp.tv_sec) + (((double) temp.tv_nsec) * 1e-9));
 
-    if (t & 1) {
+    if (t % 2 == 1) {
         GPU_PERROR(cudaMemcpy(host_cell_list, device_cell_list_2, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyDeviceToHost));
     } else {
         GPU_PERROR(cudaMemcpy(host_cell_list, device_cell_list_1, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyDeviceToHost));
