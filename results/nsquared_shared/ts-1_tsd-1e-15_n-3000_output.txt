@@ -1,0 +1,1 @@
+nsquared_shared,0.010816
