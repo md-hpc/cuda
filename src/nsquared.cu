@@ -246,9 +246,7 @@ int main(int argc, char **argv)
             momentum_z += host_vz[i];
             // calculate kinetic energy through velocity
             float particle_kinetic_energy = 0.5 * ARGON_MASS * ((host_vx[i] * host_vx[i]) + (host_vy[i] * host_vy[i]) + (host_vz[i] * host_vz[i]));
-            // printf("velocity x %.6f\n", host_vx[i]);
             potential_energy += host_pe[i];
-            // printf("potential x %.6f\n", host_pe[i]);
             kinetic_energy += particle_kinetic_energy;
         }
         printf("potential %.12f + kinetic %.12f = total energy %.12f\n", potential_energy, kinetic_energy, potential_energy + kinetic_energy);
