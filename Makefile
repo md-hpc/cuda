@@ -7,9 +7,9 @@ TESTS_DIR = tests
 BUILD_DIR = build
 
 CXXFLAGS = -I./$(INCLUDE_DIR) -lm
-DEFINE_FLAGS = -D TIMESTEPS=1 -D TIMESTEP_DURATION_FS=1e-15 -D CELL_CUTOFF_RADIUS_ANGST=100 -D UNIVERSE_LENGTH=100 -D CELL_LENGTH_X=10 -D CELL_LENGTH_Y=10 -D CELL_LENGTH_Z=10 -D SIMULATE
+DEFINE_FLAGS = -D TIMESTEPS=2 -D TIMESTEP_DURATION_FS=1e-15 -D CELL_CUTOFF_RADIUS_ANGST=100 -D UNIVERSE_LENGTH=100 -D CELL_LENGTH_X=10 -D CELL_LENGTH_Y=10 -D CELL_LENGTH_Z=10 -D SIMULATE
 
-SIMULATIONS =  nsquared nsquared_shared nsquared_n3l cell_list # naive
+SIMULATIONS = naive nsquared nsquared_shared nsquared_n3l cell_list cell_list_n3l
 TESTS = test_pdb_importer
 
 .PHONY: tests run_tests clean md_simulations
@@ -39,6 +39,9 @@ nsquared_n3l: $(SRC_DIR)/nsquared_n3l.cu $(SRC_DIR)/pdb_importer.c | $(BUILD_DIR
 	$(CCC) $(CXXFLAGS) $(DEFINE_FLAGS) $^ -o $(BUILD_DIR)/$@
 
 cell_list: $(SRC_DIR)/cell_list.cu $(SRC_DIR)/pdb_importer.c | $(BUILD_DIR)
+	$(CCC) $(CXXFLAGS) $(DEFINE_FLAGS) $^ -o $(BUILD_DIR)/$@
+
+cell_list_n3l: $(SRC_DIR)/cell_list_n3l.cu $(SRC_DIR)/pdb_importer.c | $(BUILD_DIR)
 	$(CCC) $(CXXFLAGS) $(DEFINE_FLAGS) $^ -o $(BUILD_DIR)/$@
 
 clean:

@@ -342,9 +342,9 @@ int main(int argc, char **argv)
     FILE *out = fopen(output_file, "w");
     fprintf(out, "cell_idx,particle_id,x,y,z\n");
 
-    for (int x = 0; x < CELL_LENGTH_X; ++x) {
+    for (int z = 0; z < CELL_LENGTH_Z; ++z) {
         for (int y = 0; y < CELL_LENGTH_Y; ++y) {
-            for (int z = 0; z < CELL_LENGTH_Z; ++z) {
+            for (int x = 0; x < CELL_LENGTH_X; ++x) {
                 int count = 0;
                 struct Cell current_cell = host_cell_list[x + y * CELL_LENGTH_X + z * CELL_LENGTH_X * CELL_LENGTH_Y];
                 while (count < MAX_PARTICLES_PER_CELL && current_cell.particle_ids[count] != -1) {
