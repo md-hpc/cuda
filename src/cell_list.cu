@@ -4,7 +4,6 @@ extern "C" {
 #include <stdio.h>
 #include <stdlib.h>
 #include <curand.h>
-#include <assert.h>
 
 //#define EPSILON (1.65e-9)                       // ng * m^2 / s^2
 #define EPSILON (1.65e11)                        // ng * A^2 / s^2
@@ -33,7 +32,7 @@ __device__ float compute_acceleration(float r_angstrom) {
         //float force = 4 * EPSILON * (12 * pow(SIGMA, 12.0f) / pow(r, 13.0f) - 6 * pow(SIGMA, 6.0f) / pow(r, 7.0f)) / ARGON_MASS;
 }
 
-__global__ void force_eval(struct Cell *cell_list, float *accelerations)
+__global__ void force_eval(const struct Cell *cell_list, float *accelerations)
 {
     int home_x = blockIdx.x % CELL_LENGTH_X;
     int home_y = (blockIdx.x / CELL_LENGTH_X) % CELL_LENGTH_Y;
@@ -218,7 +217,6 @@ __global__ void motion_update(struct Cell *cell_list_src, struct Cell *cell_list
 
         if (home_x == new_cell_x && home_y == new_cell_y && home_z == new_cell_z) {
             int idx = atomicAdd(&free_idx, 1);
-            assert(idx < MAX_PARTICLES_PER_CELL);
             cell_list_dst[blockIdx.x].particle_ids[idx] = current_particle_id;
             cell_list_dst[blockIdx.x].x[idx] = current_particle_x;
             cell_list_dst[blockIdx.x].y[idx] = current_particle_y;
@@ -231,7 +229,7 @@ __global__ void motion_update(struct Cell *cell_list_src, struct Cell *cell_list
 
     __syncthreads();
 
-    if (threadIdx.x >= MAX_PARTICLES_PER_CELL - free_idx)
+    if (threadIdx.x >= free_idx)
         cell_list_dst[blockIdx.x].particle_ids[threadIdx.x] = -1;
 
     return;
@@ -262,18 +260,10 @@ int main(int argc, char **argv)
     import_atoms(input_file, &host_particle_ids, &host_x, &host_y, &host_z, &particle_count);
     create_cell_list(host_particle_ids, host_x, host_y, host_z, particle_count, host_cell_list, CELL_CUTOFF_RADIUS_ANGST);
 
-/*
-    for (int i = 0; i < CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z; ++i) {
-        for (int j = 0; j < MAX_PARTICLES_PER_CELL; ++j) {
-            printf("%d,%d,%f,%f,%f\n", i, host_cell_list[i].particle_ids[j], host_cell_list[i].x[j], host_cell_list[i].y[j], host_cell_list[i].z[j]);
-        }
-    }
-*/
-
     GPU_PERROR(cudaMalloc(&device_cell_list_1, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell)));
+    GPU_PERROR(cudaMemcpy(device_cell_list_1, host_cell_list, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyHostToDevice));
     GPU_PERROR(cudaMalloc(&device_cell_list_2, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell)));
     GPU_PERROR(cudaMalloc(&accelerations, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * 27 * MAX_PARTICLES_PER_CELL * 3 * sizeof(float)));
-    GPU_PERROR(cudaMemcpy(device_cell_list_1, host_cell_list, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyHostToDevice));
 
     dim3 numBlocksCalculate(CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z, 27);
     dim3 numBlocksUpdate(CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z);
@@ -293,7 +283,7 @@ int main(int argc, char **argv)
     int t;
     for (t = 0; t < TIMESTEPS; ++t) {
         GPU_PERROR(cudaMemset(accelerations, 0, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * 27 * MAX_PARTICLES_PER_CELL * 3 * sizeof(float)));
-        if (t & 1 == 0) {
+        if (t % 2 == 0) {
             force_eval<<<numBlocksCalculate, threadsPerBlock>>>(device_cell_list_1, accelerations);
             particle_update<<<numBlocksUpdate, threadsPerBlock>>>(device_cell_list_1, accelerations);
             motion_update<<<numBlocksUpdate, threadsPerBlock>>>(device_cell_list_1, device_cell_list_2);
@@ -369,12 +359,7 @@ int main(int argc, char **argv)
     }
 #endif
 
-    for (int i = 0; i < CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z; ++i) {
-        for (int j = 0; j < MAX_PARTICLES_PER_CELL; ++j) {
-            printf("%d,%d,%f,%f,%f\n", i, host_cell_list[i].particle_ids[j], host_cell_list[i].x[j], host_cell_list[i].y[j], host_cell_list[i].z[j]);
-        }
-    }
-
     GPU_PERROR(cudaFree(device_cell_list_1));
     GPU_PERROR(cudaFree(device_cell_list_2));
+    GPU_PERROR(cudaFree(accelerations));
 }
