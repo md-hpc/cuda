@@ -205,8 +205,8 @@ int main(int argc, char **argv)
 
     GPU_PERROR(cudaMemcpy(device_particle_ids, host_particle_ids, particle_count * sizeof(float), cudaMemcpyHostToDevice));
     GPU_PERROR(cudaMemcpy(device_x_1, host_x, particle_count * sizeof(float), cudaMemcpyHostToDevice));
-    GPU_PERROR(cudaMemcpy(device_y_1, host_x, particle_count * sizeof(float), cudaMemcpyHostToDevice));
-    GPU_PERROR(cudaMemcpy(device_z_1, host_x, particle_count * sizeof(float), cudaMemcpyHostToDevice));
+    GPU_PERROR(cudaMemcpy(device_y_1, host_y, particle_count * sizeof(float), cudaMemcpyHostToDevice));
+    GPU_PERROR(cudaMemcpy(device_z_1, host_z, particle_count * sizeof(float), cudaMemcpyHostToDevice));
     GPU_PERROR(cudaMemset(vx, 0, particle_count * sizeof(float)));
     GPU_PERROR(cudaMemset(vy, 0, particle_count * sizeof(float)));
     GPU_PERROR(cudaMemset(vz, 0, particle_count * sizeof(float)));
