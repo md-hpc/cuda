@@ -1,3 +1,6 @@
 .vscode
 build
-output
+output/nsquared
+output/nsquared_shared
+output/nsquared_n3l
+output/cell_list

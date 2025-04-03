@@ -1,0 +1,2 @@
+gpu_perror: an illegal memory access was encountered src/nsquared_n3l.cu 267
+gpu_perror: an illegal memory access was encountered src/nsquared_n3l.cu 267

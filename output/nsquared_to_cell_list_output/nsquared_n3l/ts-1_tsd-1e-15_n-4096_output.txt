@@ -1,0 +1,2 @@
+nsquared_n3l,0.033981
+nsquared_n3l,0.000809

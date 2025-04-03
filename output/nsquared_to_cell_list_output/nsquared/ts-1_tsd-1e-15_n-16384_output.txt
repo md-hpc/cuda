@@ -1,0 +1,2 @@
+nsquared,0.017716
+nsquared,0.000683

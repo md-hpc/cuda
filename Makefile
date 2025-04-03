@@ -9,7 +9,7 @@ BUILD_DIR = build
 CXXFLAGS = -I./$(INCLUDE_DIR) -lm
 DEFINE_FLAGS = -D TIMESTEPS=1 -D TIMESTEP_DURATION_FS=1e-15 -D CELL_CUTOFF_RADIUS_ANGST=100 -D UNIVERSE_LENGTH=100 -D CELL_LENGTH_X=10 -D CELL_LENGTH_Y=10 -D CELL_LENGTH_Z=10 -D SIMULATE
 
-SIMULATIONS = naive nsquared nsquared_shared nsquared_n3l cell_list
+SIMULATIONS =  nsquared nsquared_shared nsquared_n3l cell_list # naive
 TESTS = test_pdb_importer
 
 .PHONY: tests run_tests clean md_simulations
@@ -17,8 +17,8 @@ TESTS = test_pdb_importer
 md_simulations: $(SIMULATIONS)
 tests: $(TESTS)
 
-run_tests: tests
-	$(BUILD_DIR)/test_pdb_importer $(TESTS_DIR)/input.pdb $(TESTS_DIR)/expected.pdb
+#run_tests: tests
+#	$(BUILD_DIR)/test_pdb_importer $(TESTS_DIR)/input.pdb $(TESTS_DIR)/expected.pdb
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)

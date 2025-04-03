@@ -1,0 +1,2 @@
+nsquared_shared,0.001734
+nsquared_shared,0.000866
