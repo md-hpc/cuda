@@ -97,9 +97,6 @@ __global__ void calculate_accelerations(float *particle_id, float *src_x, float 
                 accelerations[accelerations_block_idx + (i + jj) * 3 + 2] -= daz;
             }
         }
-	printf("ax: %.12f\n", ax);
-	printf("ay: %.12f\n", ay);
-	printf("az: %.12f\n", az);
         //__syncthreads();
     }
 
