@@ -71,7 +71,7 @@ __global__ void timestep(float *particle_id, float *src_x, float *src_y, float *
         float norm = sqrtf((diff_x * diff_x) + (diff_y * diff_y) + (diff_z * diff_z));
 
         // compute scalar acceleration and apply to xyz directions 
-        float acceleration = compute_acceleration(norm) / norm
+        float acceleration = compute_acceleration(norm) / norm;
         ax += acceleration * diff_x;
         ay += acceleration * diff_y;
         az += acceleration * diff_z;
