@@ -13,16 +13,10 @@ extern "C" {
 // use profiler to identify optimal size ie. CUDA occupancy API, nvvp
 #define MAX_PARTICLES_PER_CELL 128
 
-#define CELL_CUTOFF_RADIUS_ANGST 100
-#define CELL_LENGTH_X 3
-#define CELL_LENGTH_Y 3
-#define CELL_LENGTH_Z 3
-
-#define ARGON_MASS (39.948 * 1.66054e-27)
-#define EPSILON (1.65e-21)
-#define SIGMA (0.34f)
-#define LJMIN (-4.0f * 24.0f * EPSILON / SIGMA * (powf(7.0f / 26.0f, 7.0f / 6.0f) - 2.0f * powf(7.0f / 26.0f, 13.0f / 6.0f)))
-
+//#define EPSILON (1.65e-9)                       // ng * m^2 / s^2
+#define EPSILON (1.65e11)                        // ng * A^2 / s^2
+#define ARGON_MASS (39.948 * 1.66054e-15)       // ng
+#define SIGMA (0.034f)                           // A
 #define PLUS_1(dimension, length) ((dimension != length - 1) * (dimension + 1))
 #define MINUS_1(dimension, length) ((dimension == 0) * length + dimension - 1)
 #define GPU_PERROR(err) do {\
@@ -32,20 +26,22 @@ extern "C" {
     }\
 } while (0);
 
-// LJ force computation
+#define R_MIN (0.0317782790163)
+#define LJMAX_ACCELERATION (24.7987876375)
+
 __device__ float compute_acceleration(float r_angstrom) {
+	if (r_angstrom < R_MIN)
+		return LJMAX_ACCELERATION;
         // in A / s^2
         float temp = SIGMA / r_angstrom;
         temp = temp * temp;
         temp = temp * temp * temp;
-        float acceleration = 24 * EPSILON * (2 * temp * temp - temp) / (r_angstrom * ARGON_MASS);
+        return 24 * EPSILON * (2 * temp * temp - temp) / (r_angstrom * ARGON_MASS);
         //float force = 4 * EPSILON * (12 * pow(SIGMA, 12.0f) / pow(r, 13.0f) - 6 * pow(SIGMA, 6.0f) / pow(r, 7.0f)) / ARGON_MASS;
-
-        return (acceleration < LJMAX) * LJMAX + !(acceleration < LJMAX) * acceleration;
 }
 
 // the meat:
-__global__ void force_eval(struct Cell *cell_list, float *accelerations)
+__global__ void force_eval(const struct Cell *cell_list, float *accelerations)
 {
     /*
         1D block array will look like this:
@@ -91,82 +87,76 @@ __global__ void force_eval(struct Cell *cell_list, float *accelerations)
         neighbor_z = MINUS_1(home_z, CELL_LENGTH_Z);
     }
 
-    int neighbor_is_home = home_x == neighbor_x && home_y == neighbor_y && home_z == neighbor_z;
+    int neighbor_idx = neighbor_x + neighbor_y * CELL_LENGTH_X + neighbor_z * CELL_LENGTH_X * CELL_LENGTH_Y;
 
     // define and assign shared memory
     __shared__ struct Cell neighbor_cell;
-    int neighbor_idx = neighbor_x + neighbor_y * CELL_LENGTH_X + neighbor_z * CELL_LENGTH_X * CELL_LENGTH_Y;
-    neighbor_cell.particle_list[threadIdx.x].particle_id = cell_list[neighbor_idx].particle_list[threadIdx.x].particle_id;
-    neighbor_cell.particle_list[threadIdx.x].x = cell_list[neighbor_idx].particle_list[threadIdx.x].x;
-    neighbor_cell.particle_list[threadIdx.x].y = cell_list[neighbor_idx].particle_list[threadIdx.x].y;
-    neighbor_cell.particle_list[threadIdx.x].z = cell_list[neighbor_idx].particle_list[threadIdx.x].z;
+    neighbor_cell.particle_ids[threadIdx.x] = cell_list[neighbor_idx].particle_ids[threadIdx.x];
+    neighbor_cell.x[threadIdx.x] = cell_list[neighbor_idx].x[threadIdx.x];
+    neighbor_cell.y[threadIdx.x] = cell_list[neighbor_idx].y[threadIdx.x];
+    neighbor_cell.z[threadIdx.x] = cell_list[neighbor_idx].z[threadIdx.x];
 
     // for periodic boundary condition
-    if (!neighbor_is_home) {
+    if (blockIdx.x != neighbor_idx) {
         if (home_x - neighbor_x == CELL_LENGTH_X - 1)
-            neighbor_cell.particle_list[threadIdx.x].x += (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST);
+            neighbor_cell.x[threadIdx.x] += (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST);
         else if (neighbor_x - home_x == CELL_LENGTH_X - 1)
-            neighbor_cell.particle_list[threadIdx.x].x -= (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST);
+            neighbor_cell.x[threadIdx.x] -= (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST);
         if (home_y - neighbor_y == CELL_LENGTH_Y - 1)
-            neighbor_cell.particle_list[threadIdx.x].y += (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST);
+            neighbor_cell.y[threadIdx.x] += (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST);
         else if (neighbor_y - home_y == CELL_LENGTH_Y - 1)
-            neighbor_cell.particle_list[threadIdx.x].y -= (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST);
+            neighbor_cell.y[threadIdx.x] -= (CELL_LENGTH_Y * CELL_CUTOFF_RADIUS_ANGST);
         if (home_z - neighbor_z == CELL_LENGTH_Z - 1)
-            neighbor_cell.particle_list[threadIdx.x].z += (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST);
+            neighbor_cell.z[threadIdx.x] += (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST);
         else if (neighbor_z - home_z == CELL_LENGTH_Z - 1)
-            neighbor_cell.particle_list[threadIdx.x].z -= (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST);
+            neighbor_cell.z[threadIdx.x] -= (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST);
     }
 
     // synchronizes threads within a block (all threads must complete tasks)
     __syncthreads();
 
-    int home_idx = home_x + home_y * CELL_LENGTH_X + home_z * CELL_LENGTH_X * CELL_LENGTH_Y;
-    int reference_particle_id = cell_list[home_idx].particle_list[threadIdx.x].particle_id;
+    int reference_id = cell_list[blockIdx.x].particle_id[threadIdx.x];
     // if particle exists loop through every particle in ncell particle list
-    if (reference_particle_id != -1) {
-        float reference_particle_x = cell_list[home_idx].particle_list[threadIdx.x].x;
-        float reference_particle_y = cell_list[home_idx].particle_list[threadIdx.x].y;
-        float reference_particle_z = cell_list[home_idx].particle_list[threadIdx.x].z;
+    if (reference_id != -1) {
+        float reference_x = cell_list[blockIdx.x].x[threadIdx.x];
+        float reference_y = cell_list[blockIdx.x].y[threadIdx.x];
+        float reference_z = cell_list[blockIdx.x].z[threadIdx.x];
 
-        float reference_particle_ax = 0;
-        float reference_particle_ay = 0;
-        float reference_particle_az = 0;
+        float reference_ax = 0;
+        float reference_ay = 0;
+        float reference_az = 0;
 
         for (int i = 0; i < MAX_PARTICLES_PER_CELL; ++i) {
-            if (neighbor_cell.particle_list[i].particle_id == -1)
+            int neighbor_id = neighbor_cell.particle_ids[i];
+            if (neighbor_id == -1)
                 break;
 
-            float neighbor_particle_x = neighbor_cell.particle_list[i].x;
-            float neighbor_particle_y = neighbor_cell.particle_list[i].y;
-            float neighbor_particle_z = neighbor_cell.particle_list[i].z;
-
-            if (neighbor_is_home && !(reference_particle_id < neighbor_cell.particle_list[i].particle_id))
+            if (neighbor_idx == blockIdx.x && !(reference_id < neighbor_id))
                 continue;
 
-            float norm = sqrt(
-                pow(reference_particle_x - neighbor_particle_x, 2) +
-                pow(reference_particle_y - neighbor_particle_y, 2) +
-                pow(reference_particle_z - neighbor_particle_z, 2)
-            );
+            float diff_x = reference_x - neighbor_cell.x[i];
+            float diff_y = reference_y - neighbor_cell.y[i];
+            float diff_z = reference_z - neighbor_cell.z[i];
 
-            float acceleration = compute_acceleration(norm);
-            float ax = acceleration * reference_particle_x / norm;
-            float ay = acceleration * reference_particle_y / norm;
-            float az = acceleration * reference_particle_z / norm;
+            float norm = sqrtf((diff_x * diff_x) + (diff_y * diff_y) + (diff_z * diff_z));
 
-            reference_particle_ax += ax;
-            reference_particle_ay += ay;
-            reference_particle_az += az;
+            float acceleration = compute_acceleration(norm) / norm;
+            float ax = acceleration * diff_x;
+            float ay = acceleration * diff_y;
+            float az = acceleration * diff_z;
 
-            int neighbor_particle_id = neighbor_cell.particle_list[i].particle_id;
-            atomicAdd(&accelerations[neighbor_particle_id * 3], -ax);
-            atomicAdd(&accelerations[neighbor_particle_id * 3 + 1], -ay);
-            atomicAdd(&accelerations[neighbor_particle_id * 3 + 2], -az);
+            reference_ax += ax;
+            reference_ay += ay;
+            reference_az += az;
+
+            atomicAdd(&accelerations[neighbor_id * 3], -ax);
+            atomicAdd(&accelerations[neighbor_id * 3 + 1], -ay);
+            atomicAdd(&accelerations[neighbor_id * 3 + 2], -az);
         }
 
-        atomicAdd(&accelerations[reference_particle_id * 3], reference_particle_ax);
-        atomicAdd(&accelerations[reference_particle_id * 3 + 1], reference_particle_ay);
-        atomicAdd(&accelerations[reference_particle_id * 3 + 2], reference_particle_az);
+        atomicAdd(&accelerations[reference_id * 3], reference_ax);
+        atomicAdd(&accelerations[reference_id * 3 + 1], reference_ay);
+        atomicAdd(&accelerations[reference_id * 3 + 2], reference_az);
     }
 }
 
@@ -175,13 +165,13 @@ __global__ void particle_update(struct Cell *cell_list, float *accelerations)
     // 1 block -> 1 cell
     // 1 thread -> 1 particle
 
-    int reference_particle_id = cell_list[blockIdx.x].particle_list[threadIdx.x].particle_id;
-    if (reference_particle_id == -1)
+    int reference_id = cell_list[blockIdx.x].particle_list[threadIdx.x].particle_id;
+    if (reference_id == -1)
         return;
 
-    cell_list[blockIdx.x].particle_list[threadIdx.x].vx += accelerations[reference_particle_id * 3] * TIMESTEP_DURATION_FS;
-    cell_list[blockIdx.x].particle_list[threadIdx.x].vy += accelerations[reference_particle_id * 3 + 1] * TIMESTEP_DURATION_FS;
-    cell_list[blockIdx.x].particle_list[threadIdx.x].vz += accelerations[reference_particle_id * 3 + 2] * TIMESTEP_DURATION_FS;
+    cell_list[blockIdx.x].particle_list[threadIdx.x].vx += accelerations[reference_id * 3] * TIMESTEP_DURATION_FS;
+    cell_list[blockIdx.x].particle_list[threadIdx.x].vy += accelerations[reference_id * 3 + 1] * TIMESTEP_DURATION_FS;
+    cell_list[blockIdx.x].particle_list[threadIdx.x].vz += accelerations[reference_id * 3 + 2] * TIMESTEP_DURATION_FS;
 
     float x = cell_list[blockIdx.x].particle_list[threadIdx.x].x + cell_list[blockIdx.x].particle_list[threadIdx.x].vx * TIMESTEP_DURATION_FS;
     x += ((x < 0) - (x > CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST)) * (CELL_LENGTH_X * CELL_CUTOFF_RADIUS_ANGST);
@@ -195,7 +185,7 @@ __global__ void particle_update(struct Cell *cell_list, float *accelerations)
     z += ((z < 0) - (z > CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST)) * (CELL_LENGTH_Z * CELL_CUTOFF_RADIUS_ANGST);
     cell_list[blockIdx.x].particle_list[threadIdx.x].z = z;
 
-    accelerations[reference_particle_id] = 0;
+    accelerations[reference_id] = 0;
 }
 
 // update cell lists because particles have moved
