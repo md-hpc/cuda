@@ -92,7 +92,7 @@ void create_cell_list(const int *particle_ids, const float *x, const float *y, c
             }
         } else {
             printf("Error: Particle %d is out of bounds: (%.2f, %.2f, %.2f)\n", i, x[i], y[i], z[i]);
-	    }
+        }
     }
 
     for (int i = 0; i < CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z; ++i) {
