@@ -9,29 +9,7 @@ CUDA can be run on the [BU Shared Computing Cluster](https://www.bu.edu/tech/sup
 2. Execute the command: `module load cuda/11.3` to load the NVIDIA sdk tools.
 3. To compile your cuda code, execute the command: `nvcc <filename> -o <outfile>`
 4. To run the executable, you need a GPU node. [interactive](https://www.bu.edu/tech/support/research/system-usage/running-jobs/interactive-jobs/)/[batch](https://www.bu.edu/tech/support/research/system-usage/running-jobs/submitting-jobs/#job-options)
-  
-### Running CUDA on Google Colab
-1. Create a new colab notebook.
-2. Change runtime to GPU.
-3. Run the following commands to load the CUDA compiler to run CUDA C++ code with Jupyter Notebook.
-```
-!python --version
-!nvcc --version
-!pip install nvcc4jupyter
-%load_ext nvcc4jupyter
-```
-4. Run code by specifying `%%cuda` at beginning of the block followed by your C++ code.
-```%%cuda
-#include <stdio.h>
-__global__ void hello(){
-  printf("Hello from block: %u, thread: %u\n", blockIdx.x, threadIdx.x);
-}
-int main(){
-  // numBlocks, numThreadsPerBlock
-  hello<<<4, 4>>>();
-  cudaDeviceSynchronize();
-}
-```
+
 
 
 
