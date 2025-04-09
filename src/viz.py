@@ -1,53 +1,65 @@
+#!python3
+
+import sys
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import animation
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-L = 100
+def main(argc, argv):
+    if argc != 4:
+        print(f"Usage: {argv[0]} axis_length input.csv output.gif")
+        return
 
-# Read file and split timestemps by two newlines
-with open("particles") as f:
-    data = f.read().strip().split("\n\n")
+    L = int(argv[1])
 
-# process timestemps
-timesteps = []
-for t, timestep in enumerate(data):
-    particles = timestep.splitlines()
-    particle_positions = []
+    # Read file and split timestemps by two newlines
+    with open(argv[2]) as f:
+        f.readline()
+        data = f.read().strip().split("\n\n")
 
-    for particle in particles:
-        particle = [d.strip() for d in particle.split(',')]
-        # coord in 3D space
-        r = np.array([float(d) for d in particle[1:]])
+    # process timestemps
+    timesteps = []
+    for t, timestep in enumerate(data):
+        particles = timestep.splitlines()
+        particle_positions = []
 
-        particle_positions.append(r)
+        for particle in particles:
+            particle = [d.strip() for d in particle.split(',')]
+            # coord in 3D space
+            r = np.array([float(d) for d in particle[1:]])
 
-    if particle_positions:
-        timesteps.append(np.stack(particle_positions))
+            particle_positions.append(r)
 
-#timesteps = timesteps[:200]
+        if particle_positions:
+            timesteps.append(np.stack(particle_positions))
 
-fig = plt.figure()
-ax = fig.add_subplot(projection='3d')
+    #timesteps = timesteps[:200]
 
-def update(t, ax):
-    print(f"Animating timestep {t}")
-    ax.clear()
-    xs, ys, zs = np.split(timesteps[t],3,1)
-    ax.scatter(xs, ys, zs, c="r")
-    ax.set_xlim3d([0.0, L])
-    ax.set_xlabel('X')
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
 
-    ax.set_ylim3d([0.0, L])
-    ax.set_ylabel('Y')
+    def update(t, ax):
+        print(f"Animating timestep {t}")
+        ax.clear()
+        xs, ys, zs = np.split(timesteps[t],3,1)
+        ax.scatter(xs, ys, zs, c="r")
+        ax.set_xlim3d([0.0, L])
+        ax.set_xlabel('X')
 
-    ax.set_zlim3d([0.0, L])
-    ax.set_zlabel('Z')
+        ax.set_ylim3d([0.0, L])
+        ax.set_ylabel('Y')
+
+        ax.set_zlim3d([0.0, L])
+        ax.set_zlabel('Z')
 
 
 
-# Setting the axes properties
-ani = animation.FuncAnimation(fig, update, len(timesteps), fargs=(ax,), interval=10, repeat_delay=5000, blit=False)
-ani.save('md.gif', writer='imagemagick')
-plt.show()
+    # Setting the axes properties
+    ani = animation.FuncAnimation(fig, update, len(timesteps), fargs=(ax,), interval=10, repeat_delay=5000, blit=False)
+    ani.save(argv[3], writer='imagemagick')
+    plt.show()
+
+if __name__ == "__main__":
+    main(len(sys.argv), sys.argv)

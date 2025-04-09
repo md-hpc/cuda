@@ -5,25 +5,33 @@
 #include <math.h>
 
 //#define EPSILON (1.65e-9)                       // ng * m^2 / s^2
-#define EPSILON (1.65e11)                        // ng * A^2 / s^2
+#define EPSILON (1.65e11)                       // ng * A^2 / s^2 originally (1.65e-9)
 #define ARGON_MASS (39.948 * 1.66054e-15)       // ng
-#define SIGMA (0.034f)                           // A
-#define LJMIN (4.0f * 24.0f * EPSILON / SIGMA * (powf(7.0f / 26.0f, 7.0f / 6.0f) - 2.0f * powf(7.0f / 26.0f, 13.0f / 6.0f)))
+#define SIGMA (3.4f)                            // Angstrom
+#define R_MIN (3.13796173693f)                  // r(-4 * V(2^(1/6) * EPSILON))
+#define LJMAX_ACCELERATION (6.8829688151e25)    // A(R_MIN) in Angstrom / s^2
 
 
 float compute_acceleration(float r_angstrom) {
+        if (r_angstrom < R_MIN)
+            return LJMAX_ACCELERATION;
+
         // in A / s^2
-        float temp = pow(SIGMA / r_angstrom, 6);
-        float acceleration = 24 * EPSILON * (2 * temp * temp - temp) / (r_angstrom * ARGON_MASS);
+        float temp = SIGMA / r_angstrom;
+        temp = temp * temp; // ^2
+        temp = temp * temp * temp; // ^ 6
+
+        return 24 * EPSILON * (2 * temp * temp - temp) / (r_angstrom * ARGON_MASS);
         //float force = 4 * EPSILON * (12 * pow(SIGMA, 12.0f) / pow(r, 13.0f) - 6 * pow(SIGMA, 6.0f) / pow(r, 7.0f)) / ARGON_MASS;
 
-        return (acceleration < LJMIN) * LJMIN + !(acceleration < LJMIN) * acceleration;
-        return acceleration;
 }
 
-void naive(struct Particle *particle_list, const int particle_count)
+void naive(int *particle_ids, float *x, float *y, float *z, int particle_count)
 {
         float accelerations[particle_count][3];
+        float *vx = calloc(particle_count, sizeof(float));
+        float *vy = calloc(particle_count, sizeof(float));
+        float *vz = calloc(particle_count, sizeof(float));
 
 	FILE *file = fopen("out_naive.csv", "w");
         fprintf(file, "particle_id,x,y,z\n");
@@ -38,51 +46,47 @@ void naive(struct Particle *particle_list, const int particle_count)
                                 if (i == j)
                                         continue;
 
-                                struct Particle reference_particle = particle_list[i];
-                                struct Particle neighbor_particle = particle_list[j];
+                                float diff_x = x[i] - x[j];
+                                float diff_y = y[i] - y[j];
+                                float diff_z = z[i] - z[j];
 
-                                float norm = sqrt(
-                                        pow(reference_particle.x - neighbor_particle.x, 2) +
-                                        pow(reference_particle.y - neighbor_particle.y, 2) +
-                                        pow(reference_particle.z - neighbor_particle.z, 2)
-                                );
+                                diff_x += ((diff_x < -UNIVERSE_LENGTH / 2) - (diff_x > UNIVERSE_LENGTH / 2)) * UNIVERSE_LENGTH;
+                                diff_y += ((diff_y < -UNIVERSE_LENGTH / 2) - (diff_y > UNIVERSE_LENGTH / 2)) * UNIVERSE_LENGTH;
+                                diff_z += ((diff_z < -UNIVERSE_LENGTH / 2) - (diff_z > UNIVERSE_LENGTH / 2)) * UNIVERSE_LENGTH;
+
+                                float norm = sqrt((diff_x * diff_x) + (diff_y * diff_y) + (diff_z * diff_z));
                                 
-                                float acceleration = compute_acceleration(norm);
-                                accelerations[i][0] += acceleration * (reference_particle.x - neighbor_particle.x) / norm;
-                                accelerations[i][1] += acceleration * (reference_particle.y - neighbor_particle.y) / norm;
-                                accelerations[i][2] += acceleration * (reference_particle.z - neighbor_particle.z) / norm;
+                                float acceleration = compute_acceleration(norm) / norm;
+                                accelerations[i][0] += acceleration * diff_x;
+                                accelerations[i][1] += acceleration * diff_y;
+                                accelerations[i][2] += acceleration * diff_z;
+                
+                                //printf("i: %d, a: %f\n", i, acceleration);
+                                //printf("i: %d, xyz: (%f, %f, %f)\n", i, x[i], y[i], z[i]);
                         }
                 }
 
-/*
-                for (int i = 0; i < 10; ++i) {
-                        printf("accelerations: %.30f\t%.30f\t%.30f\n", accelerations[i][0] * TIMESTEP_DURATION_FS, accelerations[i][1] * TIMESTEP_DURATION_FS, accelerations[i][2] * TIMESTEP_DURATION_FS);
-                }
-*/
 
                 // motion update
                 for (int i = 0; i < particle_count; ++i) {
-                        struct Particle reference_particle = particle_list[i];
-
-                        reference_particle.vx += accelerations[i][0] * TIMESTEP_DURATION_FS;
-                        reference_particle.vy += accelerations[i][1] * TIMESTEP_DURATION_FS;
-                        reference_particle.vz += accelerations[i][2] * TIMESTEP_DURATION_FS;
+                        vx[i] += accelerations[i][0] * TIMESTEP_DURATION_FS;
+                        vy[i] += accelerations[i][1] * TIMESTEP_DURATION_FS;
+                        vz[i] += accelerations[i][2] * TIMESTEP_DURATION_FS;
 
                         // get new reference particle position taking into account periodic boundary conditions
-                        float x = reference_particle.x + reference_particle.vx * TIMESTEP_DURATION_FS;
-                        x += ((x < 0) - (x > UNIVERSE_LENGTH)) * UNIVERSE_LENGTH;
-                        reference_particle.x = x;
+                        float temp_x = x[i] + vx[i] * TIMESTEP_DURATION_FS;
+                        temp_x += ((temp_x < 0) - (temp_x > UNIVERSE_LENGTH)) * UNIVERSE_LENGTH;
+                        x[i] = temp_x;
                         
-                        float y = reference_particle.y + reference_particle.vy * TIMESTEP_DURATION_FS;
-                        y += ((y < 0) - (y > UNIVERSE_LENGTH)) * UNIVERSE_LENGTH;
-                        reference_particle.y = y;
+                        float temp_y = y[i] + vy[i] * TIMESTEP_DURATION_FS;
+                        temp_y += ((temp_y < 0) - (temp_y > UNIVERSE_LENGTH)) * UNIVERSE_LENGTH;
+                        y[i] = temp_y;
 
-                        float z = reference_particle.z + reference_particle.vz * TIMESTEP_DURATION_FS;
-                        z += ((z < 0) - (z > UNIVERSE_LENGTH)) * UNIVERSE_LENGTH;
-                        reference_particle.z = z;
+                        float temp_z = z[i] + vz[i] * TIMESTEP_DURATION_FS;
+                        temp_z += ((temp_z < 0) - (temp_z > UNIVERSE_LENGTH)) * UNIVERSE_LENGTH;
+                        z[i] = temp_z;
 
-                        particle_list[i] = reference_particle;
-                        fprintf(file, "%d,%f,%f,%f\n", reference_particle.particle_id, reference_particle.x, reference_particle.y, reference_particle.z);
+                        fprintf(file, "%d,%f,%f,%f\n", particle_ids[i], x[i], y[i], z[i]);
                 }
                 fprintf(file, "\n");
         }
