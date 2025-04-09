@@ -10,6 +10,6 @@
 	
 module load cuda/11.3
 
-nvcc -I./include -D TIMESTEPS=1 -D TIMESTEP_DURATION_FS=1e-15 -D CELL_CUTOFF_RADIUS_ANGST=10 -D UNIVERSE_LENGTH=100 -D TIME_RUN -D CELL_LENGTH_X=10 CELL_LENGTH_Y=10 CELL_LENGTH_Z=10 src/pdb_importer.c src/nsquared_n3l.cu -o build/nsquared_n3l
+nvcc -I./include -D TIMESTEPS=1 -D TIMESTEP_DURATION_FS=2.5e-13 -D UNIVERSE_LENGTH=1000 -D TIME_RUN src/pdb_importer.c src/nsquared_n3l.cu -o build/nsquared_n3l
 time build/nsquared_n3l input/random_particles-65536.pdb output/nsquared_n3l/ts-1_tsd-1e-15_n-65536_output.csv
 
