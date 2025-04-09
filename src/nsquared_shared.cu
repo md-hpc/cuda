@@ -180,9 +180,12 @@ int main(int argc, char **argv)
 #endif
 
 #ifdef TIME_RUN
-    struct timespec time_start;
-    struct timespec time_stop;
-    clock_gettime(CLOCK_REALTIME, &time_start);
+    cudaEvent_t time_start;
+    cudaEvent_t time_stop;
+    GPU_PERROR(cudaEventCreate(&time_start));
+    GPU_PERROR(cudaEventCreate(&time_stop));
+
+    GPU_PERROR(cudaEventRecord(time_start));
 #endif
 
     for (int t = 1l; t <= TIMESTEPS; ++t) {
@@ -210,17 +213,7 @@ int main(int argc, char **argv)
     }
 
 #ifdef TIME_RUN
-    clock_gettime(CLOCK_REALTIME, &time_stop);
-
-    struct timespec temp;
-    temp.tv_sec = time_stop.tv_sec - time_start.tv_sec;
-    temp.tv_nsec = time_stop.tv_nsec - time_start.tv_nsec;
-    if (temp.tv_nsec < 0) {
-        temp.tv_sec = temp.tv_sec - 1;
-        temp.tv_nsec = temp.tv_nsec + 1000000000;
-    }
-
-    printf("nsquared_shared,%f\n", ((double) temp.tv_sec) + (((double) temp.tv_nsec) * 1e-9));
+    GPU_PERROR(cudaEventRecord(time_stop));
 
     if (TIMESTEPS & 1) {
         GPU_PERROR(cudaMemcpy(host_x, device_x_2, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
@@ -231,6 +224,11 @@ int main(int argc, char **argv)
         GPU_PERROR(cudaMemcpy(host_y, device_y_1, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
         GPU_PERROR(cudaMemcpy(host_z, device_z_1, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
     }
+
+    GPU_PERROR(cudaEventSynchronize(time_stop));
+    float elapsed_milliseconds = 0;
+    GPU_PERROR(cudaEventElapsedTime(&elapsed_milliseconds, time_start, time_stop));
+    printf("nsquared shared seconds,%f\n", elapsed_milliseconds / 1000);
         
     FILE *out = fopen(output_file, "w");
     fprintf(out, "particle_id,x,y,z\n");

@@ -276,9 +276,12 @@ int main(int argc, char **argv)
 #endif
 
 #ifdef TIME_RUN
-    struct timespec time_start;
-    struct timespec time_stop;
-    clock_gettime(CLOCK_REALTIME, &time_start);
+    cudaEvent_t time_start;
+    cudaEvent_t time_stop;
+    GPU_PERROR(cudaEventCreate(&time_start));
+    GPU_PERROR(cudaEventCreate(&time_stop));
+
+    GPU_PERROR(cudaEventRecord(time_start));
 #endif
 
     int t;
@@ -321,17 +324,6 @@ int main(int argc, char **argv)
     }
 
 #ifdef TIME_RUN
-    clock_gettime(CLOCK_REALTIME, &time_stop);
-
-    struct timespec temp;
-    temp.tv_sec = time_stop.tv_sec - time_start.tv_sec;
-    temp.tv_nsec = time_stop.tv_nsec - time_start.tv_nsec;
-    if (temp.tv_nsec < 0) {
-        temp.tv_sec = temp.tv_sec - 1;
-        temp.tv_nsec = temp.tv_nsec + 1000000000;
-    }
-
-    printf("cell_list,%f\n", ((double) temp.tv_sec) + (((double) temp.tv_nsec) * 1e-9));
 
     if (t % 2 == 1) {
         GPU_PERROR(cudaMemcpy(host_cell_list, device_cell_list_2, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyDeviceToHost));
@@ -339,8 +331,13 @@ int main(int argc, char **argv)
         GPU_PERROR(cudaMemcpy(host_cell_list, device_cell_list_1, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyDeviceToHost));
     }
 
+    GPU_PERROR(cudaEventSynchronize(time_stop));
+    float elapsed_milliseconds = 0;
+    GPU_PERROR(cudaEventElapsedTime(&elapsed_milliseconds, time_start, time_stop));
+    printf("cell_list seconds,%f\n", elapsed_milliseconds / 1000);
+
     FILE *out = fopen(output_file, "w");
-    fprintf(out, "cell_idx,particle_id,x,y,z\n");
+    fprintf(out, "particle_id,x,y,z\n");
 
     for (int z = 0; z < CELL_LENGTH_Z; ++z) {
         for (int y = 0; y < CELL_LENGTH_Y; ++y) {
@@ -348,8 +345,7 @@ int main(int argc, char **argv)
                 int count = 0;
                 struct Cell current_cell = host_cell_list[x + y * CELL_LENGTH_X + z * CELL_LENGTH_X * CELL_LENGTH_Y];
                 while (count < MAX_PARTICLES_PER_CELL && current_cell.particle_ids[count] != -1) {
-                    fprintf(out, "%d,%d,%f,%f,%f\n", x + y * CELL_LENGTH_X + z * CELL_LENGTH_X * CELL_LENGTH_Y,
-                                                     current_cell.particle_ids[count],
+                    fprintf(out, "%d,%f,%f,%f\n", current_cell.particle_ids[count],
                                                      current_cell.x[count],
                                                      current_cell.y[count],
                                                      current_cell.z[count]);
