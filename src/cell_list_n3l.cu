@@ -14,9 +14,9 @@ extern "C" {
 #define MAX_PARTICLES_PER_CELL 128
 
 //#define EPSILON (1.65e-9)                       // ng * m^2 / s^2
-#define EPSILON (1.65e11)                        // ng * A^2 / s^2
+#define EPSILON (1.65e11)                       // ng * A^2 / s^2 originally (1.65e-9)
 #define ARGON_MASS (39.948 * 1.66054e-15)       // ng
-#define SIGMA (0.034f)                           // A
+#define SIGMA (3.4f)                            // Angstrom
 #define PLUS_1(dimension, length) ((dimension != length - 1) * (dimension + 1))
 #define MINUS_1(dimension, length) ((dimension == 0) * length + dimension - 1)
 #define GPU_PERROR(err) do {\
@@ -26,18 +26,19 @@ extern "C" {
     }\
 } while (0);
 
-#define R_MIN (0.0317782790163)
-#define LJMAX_ACCELERATION (24.7987876375)
+#define R_MIN (3.13796173693f)                  // r(-4 * V(2^(1/6) * EPSILON))
+#define LJMAX_ACCELERATION (6.8829688151e25)    // A(R_MIN) in Angstrom / s^2
 
 __device__ float compute_acceleration(float r_angstrom) {
-	if (r_angstrom < R_MIN)
-		return LJMAX_ACCELERATION;
+        if (r_angstrom < R_MIN)
+            return LJMAX_ACCELERATION;
+
         // in A / s^2
         float temp = SIGMA / r_angstrom;
-        temp = temp * temp;
-        temp = temp * temp * temp;
+        temp = temp * temp; // ^2
+        temp = temp * temp * temp; // ^ 6
+
         return 24 * EPSILON * (2 * temp * temp - temp) / (r_angstrom * ARGON_MASS);
-        //float force = 4 * EPSILON * (12 * pow(SIGMA, 12.0f) / pow(r, 13.0f) - 6 * pow(SIGMA, 6.0f) / pow(r, 7.0f)) / ARGON_MASS;
 }
 
 // the meat:

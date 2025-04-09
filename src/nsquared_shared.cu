@@ -11,7 +11,7 @@ extern "C" {
 #define MAX_PARTICLES_PER_BLOCK 1024
 #define EPSILON (1.65e11)                       // ng * A^2 / s^2 originally (1.65e-9)
 #define ARGON_MASS (39.948 * 1.66054e-15)       // ng
-#define SIGMA (0.034f)                          // A
+#define SIGMA (3.4f)                            // Angstrom
 #define GPU_PERROR(err) do {\
     if (err != cudaSuccess) {\
         fprintf(stderr,"gpu_perror: %s %s %d\n", cudaGetErrorString(err), __FILE__, __LINE__);\
@@ -19,18 +19,19 @@ extern "C" {
     }\
 } while (0);
 
-// constexpr float LJMAX = (4.0f * 24.0f * EPSILON / SIGMA * (powf(7.0f / 26.0f, 7.0f / 6.0f) - 2.0f * powf(7.0f / 26.0f, 13.0f / 6.0f)));
-constexpr float LJMAX = (4.0f * 24.0f * EPSILON / SIGMA * (0.216344308307f - 2.0f * 0.0582465445441f));
+#define R_MIN (3.13796173693f)                  // r(-4 * V(2^(1/6) * EPSILON))
+#define LJMAX_ACCELERATION (6.8829688151e25)    // A(R_MIN) in Angstrom / s^2
 
 __device__ float compute_acceleration(float r_angstrom) {
+        if (r_angstrom < R_MIN)
+            return LJMAX_ACCELERATION;
+
         // in A / s^2
         float temp = SIGMA / r_angstrom;
-        temp = temp * temp;
-        temp = temp * temp * temp;
-        float acceleration = 24 * EPSILON * (2 * temp * temp - temp) / (r_angstrom * ARGON_MASS);
-        //float force = 4 * EPSILON * (12 * pow(SIGMA, 12.0f) / pow(r, 13.0f) - 6 * pow(SIGMA, 6.0f) / pow(r, 7.0f)) / ARGON_MASS;
+        temp = temp * temp; // ^2
+        temp = temp * temp * temp; // ^ 6
 
-        return (acceleration < LJMAX) * LJMAX + !(acceleration < LJMAX) * acceleration;
+        return 24 * EPSILON * (2 * temp * temp - temp) / (r_angstrom * ARGON_MASS);
 }
 
 __global__ void timestep(float *particle_id, float *src_x, float *src_y, float *src_z,
