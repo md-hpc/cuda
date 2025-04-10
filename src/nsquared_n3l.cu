@@ -256,7 +256,7 @@ int main(int argc, char **argv)
 #ifdef TIME_RUN
     GPU_PERROR(cudaEventRecord(time_stop));
 
-    if (TIMESTEPS & 1) {
+    if (TIMESTEPS % 2 == 1)
         GPU_PERROR(cudaMemcpy(host_x, device_x_2, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
         GPU_PERROR(cudaMemcpy(host_y, device_y_2, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
         GPU_PERROR(cudaMemcpy(host_z, device_z_2, particle_count * sizeof(float), cudaMemcpyDeviceToHost));

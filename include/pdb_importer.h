@@ -43,7 +43,8 @@ int import_atoms(char *filename, int **particle_ids, float **x, float **y, float
  *       have sufficient memory allocated to store the particles.
  */
 void create_cell_list(const int *particle_ids, const float *x, const float *y, const float *z,
-                      int particle_count, struct Cell *cell_list, int cell_cutoff_radius);
+                      int particle_count, struct Cell *cell_list, int cell_cutoff_radius,
+                      int cell_dim_x, int cell_dim_y, int cell_dim_z);
 
 void cell_list_to_csv(struct Cell *cell_list, int num_cells, char *filename);
 

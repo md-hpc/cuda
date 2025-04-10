@@ -2,9 +2,12 @@
 
 PROJ_DIR=$(git rev-parse --show-toplevel)
 
-for implementation in nsquared nsquared_shared nsquared_n3l cell_list; do  
+TIMESTEPS=1
+TIMESTEP_DURATION=2.5e-13
+
+for implementation in nsquared nsquared_shared nsquared_n3l cell_list cell_list_n3l; do
 	for particle_count in 1024 4096 16384 65536; do
-		cat ${PROJ_DIR}/output/${implementation}/ts-1_tsd-1e-15_n-${particle_count}_output.txt
+		cat ${PROJ_DIR}/output/${implementation}/ts_${TIMESTEPS}_tsd_${TIMESTEP_DURATION}_n_${particle_count}_output.txt
 	done
 done
 

@@ -259,7 +259,7 @@ int main(int argc, char **argv)
     float *accelerations;
 
     import_atoms(input_file, &host_particle_ids, &host_x, &host_y, &host_z, &particle_count);
-    create_cell_list(host_particle_ids, host_x, host_y, host_z, particle_count, host_cell_list, CELL_CUTOFF_RADIUS_ANGST);
+    create_cell_list(host_particle_ids, host_x, host_y, host_z, particle_count, host_cell_list, CELL_CUTOFF_RADIUS_ANGST, CELL_LENGTH_X, CELL_LENGTH_Y, CELL_LENGTH_Z);
 
     GPU_PERROR(cudaMalloc(&device_cell_list_1, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell)));
     GPU_PERROR(cudaMemcpy(device_cell_list_1, host_cell_list, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyHostToDevice));

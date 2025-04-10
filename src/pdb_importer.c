@@ -57,20 +57,20 @@ int import_atoms(char *filename, int **particle_ids, float **x, float **y, float
     return 0;
 }
 
-// TOOD: update to work will x y z arrays rather than particle structs
 void create_cell_list(const int *particle_ids, const float *x, const float *y, const float *z,
-                      int particle_count, struct Cell *cell_list, int cell_cutoff_radius)
+                      int particle_count, struct Cell *cell_list, int cell_cutoff_radius,
+                      int cell_dim_x, int cell_dim_y, int cell_dim_z)
 {
-    int free_idx[CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z] = {0};
+    int *free_idx = (int *) calloc(cell_dim_x * cell_dim_y * cell_dim_z, sizeof(int));
     int cell_idx;
 
     for (int i = 0; i < particle_count; ++i) {
         int x_cell = x[i] / cell_cutoff_radius;
         int y_cell = y[i] / cell_cutoff_radius;
         int z_cell = z[i] / cell_cutoff_radius;
-        if (x_cell >= 0 && x_cell < CELL_LENGTH_X && y_cell >= 0 && y_cell < CELL_LENGTH_Y && z_cell >= 0 && z_cell < CELL_LENGTH_Z) {
-            cell_idx = x_cell + y_cell * CELL_LENGTH_X + z_cell * CELL_LENGTH_X * CELL_LENGTH_Y;
-            if (cell_idx >= 0 && cell_idx < CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z) {
+        if (x_cell >= 0 && x_cell < cell_dim_x && y_cell >= 0 && y_cell < cell_dim_y && z_cell >= 0 && z_cell < cell_dim_z) {
+            cell_idx = x_cell + y_cell * cell_dim_x + z_cell * cell_dim_x * cell_dim_y;
+            if (cell_idx >= 0 && cell_idx < cell_dim_x * cell_dim_y * cell_dim_z) {
                 int free_slot = free_idx[cell_idx];
                 if (free_slot < MAX_PARTICLES_PER_CELL) {
                     cell_list[cell_idx].particle_ids[free_slot] = particle_ids[i];
@@ -95,9 +95,11 @@ void create_cell_list(const int *particle_ids, const float *x, const float *y, c
         }
     }
 
-    for (int i = 0; i < CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z; ++i) {
+    for (int i = 0; i < cell_dim_x * cell_dim_y * cell_dim_z; ++i) {
         memset(&cell_list[i].particle_ids[free_idx[i]], -1, (MAX_PARTICLES_PER_CELL - free_idx[i]) * sizeof(int));
     }
+
+    free(free_idx);
 }
 
 // TOOD: update to work will x y z arrays rather than particle structs
