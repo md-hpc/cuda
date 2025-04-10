@@ -335,7 +335,7 @@ int main(int argc, char **argv)
     GPU_PERROR(cudaEventSynchronize(time_stop));
     float elapsed_milliseconds = 0;
     GPU_PERROR(cudaEventElapsedTime(&elapsed_milliseconds, time_start, time_stop));
-    printf("cell_list seconds,%f\n", elapsed_milliseconds / 1000);
+    printf("cell_list,%d,%f\n", particle_count, elapsed_milliseconds / 1000);
 
     FILE *out = fopen(output_file, "w");
     fprintf(out, "particle_id,x,y,z\n");
