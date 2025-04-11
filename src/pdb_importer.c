@@ -4,7 +4,6 @@
 #include <stdlib.h>
 #include <sys/errno.h>
 
-// Creates arrays for x, y, z position and particle_id from a PDB file
 int import_atoms(char *filename, int **particle_ids, float **x, float **y, float **z, int *particle_count)
 {
     FILE *file = fopen(filename, "r");
@@ -102,7 +101,7 @@ void create_cell_list(const int *particle_ids, const float *x, const float *y, c
     free(free_idx);
 }
 
-void cell_list_to_csv(struct Cell *cell_list, int num_cells, char *filename, char *mode)
+void cell_list_to_csv(struct Cell *cell_list, int num_cells, char *filename, const char *mode)
 {
     FILE *file = fopen(filename, mode);
 
