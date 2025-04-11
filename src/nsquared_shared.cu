@@ -6,7 +6,14 @@ extern "C" {
 #include <stdio.h>
 #include <stdlib.h>
 #include <curand.h>
-#include <assert.h>
+
+#if defined(SIMULATE) && defined(TIME_RUN)
+#error Cannot compile with both SIMULATE and TIME_RUN flags
+#endif
+
+#if !defined(SIMULATE) && !defined(TIME_RUN)
+#error Cannot compile without neither SIMULATE nor TIME_RUN flags
+#endif
 
 #define MAX_PARTICLES_PER_BLOCK 1024
 #define EPSILON (1.65e11)                       // ng * A^2 / s^2 originally (1.65e-9)
@@ -66,7 +73,10 @@ __global__ void timestep(float *particle_id, float *src_x, float *src_y, float *
         shared_x[threadIdx.x] = src_x[i + threadIdx.x];
         shared_y[threadIdx.x] = src_y[i + threadIdx.x];
         shared_z[threadIdx.x] = src_z[i + threadIdx.x];
-        //__syncthreads();
+
+#if MAX_PARTICLES_PER_BLOCK > 32
+        __syncthreads();
+#endif
 
         for (int j = 0; j < MAX_PARTICLES_PER_BLOCK; ++j) {
             // dont calculate acceleration with itself
@@ -89,7 +99,9 @@ __global__ void timestep(float *particle_id, float *src_x, float *src_y, float *
             ay += acceleration * (reference_y - neighbor_y) / norm;
             az += acceleration * (reference_z - neighbor_z) / norm;
         }
-        //__syncthreads();
+#if MAX_PARTICLES_PER_BLOCK > 32
+        __syncthreads();
+#endif
     }
 
     // calculate velocity for reference particle
@@ -131,6 +143,8 @@ int main(int argc, char **argv)
     
     char *input_file = argv[1];
     char *output_file = argv[2];
+    FILE *out = fopen(output_file, "w");
+    fprintf(out, "particle_id,x,y,z\n");
 
     int particle_count;
 
@@ -175,11 +189,6 @@ int main(int argc, char **argv)
     dim3 numBlocks((particle_count - 1) / MAX_PARTICLES_PER_BLOCK + 1);
     dim3 threadsPerBlock(MAX_PARTICLES_PER_BLOCK);
 
-#ifdef SIMULATE
-    FILE *out = fopen(output_file, "w");
-    fprintf(out, "particle_id,x,y,z\n");
-#endif
-
 #ifdef TIME_RUN
     cudaEvent_t time_start;
     cudaEvent_t time_stop;
@@ -189,8 +198,8 @@ int main(int argc, char **argv)
     GPU_PERROR(cudaEventRecord(time_start));
 #endif
 
-    for (int t = 1l; t <= TIMESTEPS; ++t) {
-        if (t % 2 == 1) {
+    for (int t = 0; t < TIMESTEPS; ++t) {
+        if (t % 2 == 0) {
             timestep<<<numBlocks, threadsPerBlock>>>(device_particle_ids, device_x_1, device_y_1, device_z_1, vx, vy, vz, device_x_2, device_y_2, device_z_2, particle_count);
 #ifdef SIMULATE
             GPU_PERROR(cudaMemcpy(host_x, device_x_2, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
@@ -216,7 +225,7 @@ int main(int argc, char **argv)
 #ifdef TIME_RUN
     GPU_PERROR(cudaEventRecord(time_stop));
 
-    if (TIMESTEPS & 1) {
+    if (TIMESTEPS % 2 == 1) {
         GPU_PERROR(cudaMemcpy(host_x, device_x_2, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
         GPU_PERROR(cudaMemcpy(host_y, device_y_2, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
         GPU_PERROR(cudaMemcpy(host_z, device_z_2, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
@@ -231,8 +240,6 @@ int main(int argc, char **argv)
     GPU_PERROR(cudaEventElapsedTime(&elapsed_milliseconds, time_start, time_stop));
     printf("nsquared_shared,%d,%f\n", particle_count, elapsed_milliseconds / 1000);
         
-    FILE *out = fopen(output_file, "w");
-    fprintf(out, "particle_id,x,y,z\n");
     for (int i = 0; i < particle_count; ++i) {
         fprintf(out, "%d,%f,%f,%f\n", host_particle_ids[i], host_x[i], host_y[i], host_z[i]);
     }

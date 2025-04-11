@@ -5,6 +5,13 @@ extern "C" {
 #include <stdlib.h>
 #include <curand.h>
 
+#if defined(SIMULATE) && defined(TIME_RUN)
+#error Cannot compile with both SIMULATE and TIME_RUN flags
+#endif
+
+#if !defined(SIMULATE) && !defined(TIME_RUN)
+#error Cannot compile without neither SIMULATE nor TIME_RUN flags
+#endif
 
 // minimum max shared memory size per SM across all architectures is 64K
 // minimum max resident block per SM across all architectures is 16
@@ -247,13 +254,17 @@ __global__ void motion_update(struct Cell *cell_list_src, struct Cell *cell_list
 
 int main(int argc, char **argv) 
 {
-
     if (argc != 3) {
 	    printf("Usage: ./cell_list <input_file> <output_file>\n");
 	    return 1;
     }
+
     char *input_file = argv[1];
     char *output_file = argv[2];
+    FILE *out = fopen(output_file, "w");
+    fprintf(out, "particle_id,x,y,z\n");
+    fclose(out);
+
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // INITIALIZE CELL LIST WITH PARTICLE DATA
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -313,14 +324,6 @@ int main(int argc, char **argv)
     // steps are separated to ensure threads are synchronized (that force_eval is done)
     // output of force_eval is stores in device_cell_list and accelerations
 
-    int flag = 1;
-
-    // address + ((flag == 1) * sizeof(cell list))
-
-    // if flag == 0, then pass in address
-    // if flag == 1, then pass in address + offset
-    // flag = !flag;
-
 #ifdef TIME_RUN
     cudaEvent_t time_start;
     cudaEvent_t time_stop;
@@ -331,30 +334,33 @@ int main(int argc, char **argv)
 #endif    
 
     for (int t = 0; t < TIMESTEPS; ++t) {
-        if (flag) {
+        if (t % 2 == 0) {
             force_eval<<<numBlocksForce, threadsPerBlockForce>>>(device_cell_list_1, accelerations);
             particle_update<<<numBlocksParticle, threadsPerBlockParticle>>>(device_cell_list_1, accelerations);
             motion_update<<<numBlocksMotion, MAX_PARTICLES_PER_CELL>>>(device_cell_list_1, device_cell_list_2);
+#ifdef SIMULATE
+            GPU_PERROR(cudaMemcpy(host_cell_list, device_cell_list_2, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyDeviceToHost));
+#endif
         } else {
             force_eval<<<numBlocksForce, threadsPerBlockForce>>>(device_cell_list_2, accelerations);
             particle_update<<<numBlocksParticle, threadsPerBlockParticle>>>(device_cell_list_2, accelerations);
             motion_update<<<numBlocksMotion, MAX_PARTICLES_PER_CELL>>>(device_cell_list_2, device_cell_list_1);
+#ifdef SIMULATE
+            GPU_PERROR(cudaMemcpy(host_cell_list, device_cell_list_1, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyDeviceToHost));
+#endif
         }
-        flag = !flag;
+#ifdef SIMULATE
+        cell_list_to_csv(host_cell_list, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z, output_file, "a");
+#endif
     }
 
 #ifdef TIME_RUN
     GPU_PERROR(cudaEventRecord(time_stop));
 
-    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    //  COPY FINAL RESULT BACK TO HOST CPU
-    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    // if flag == 0, then results are in the second half
-    // if flag == 1, then results are in the first half
-    if (flag) {
-        GPU_PERROR(cudaMemcpy(host_cell_list, device_cell_list_1, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyDeviceToHost));
-    } else {
+    if (TIMESTEPS % 2 == 1) {
         GPU_PERROR(cudaMemcpy(host_cell_list, device_cell_list_2, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyDeviceToHost));
+    } else {
+        GPU_PERROR(cudaMemcpy(host_cell_list, device_cell_list_1, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyDeviceToHost));
     }
 
     GPU_PERROR(cudaEventSynchronize(time_stop));
@@ -362,24 +368,7 @@ int main(int argc, char **argv)
     GPU_PERROR(cudaEventElapsedTime(&elapsed_milliseconds, time_start, time_stop));
     printf("cell_list_n3l,%d,%f\n", particle_count, elapsed_milliseconds / 1000);
 
-    FILE *out = fopen(output_file, "w");
-    fprintf(out, "particle_id,x,y,z\n");
-
-    for (int z = 0; z < CELL_LENGTH_Z; ++z) {
-        for (int y = 0; y < CELL_LENGTH_Y; ++y) {
-            for (int x = 0; x < CELL_LENGTH_X; ++x) {
-                int count = 0;
-                struct Cell current_cell = host_cell_list[x + y * CELL_LENGTH_X + z * CELL_LENGTH_X * CELL_LENGTH_Y];
-                while (count < MAX_PARTICLES_PER_CELL && current_cell.particle_ids[count] != -1) {
-                    fprintf(out, "%d,%f,%f,%f\n", current_cell.particle_ids[count],
-                                                  current_cell.x[count],
-                                                  current_cell.y[count],
-                                                  current_cell.z[count]);
-                    count++;
-                }
-            }
-        }
-    }
+    cell_list_to_csv(host_cell_list, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z, output_file, "a");
 #endif
 
     GPU_PERROR(cudaFree(device_cell_list_1));

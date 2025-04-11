@@ -102,23 +102,22 @@ void create_cell_list(const int *particle_ids, const float *x, const float *y, c
     free(free_idx);
 }
 
-// TOOD: update to work will x y z arrays rather than particle structs
-void cell_list_to_csv(struct Cell *cell_list, int num_cells, char *filename)
+void cell_list_to_csv(struct Cell *cell_list, int num_cells, char *filename, char *mode)
 {
-    FILE *file = fopen(filename, "w");
-    fprintf(file, "particle_id,x,y,z\n");
+    FILE *file = fopen(filename, mode);
 
     for (int i = 0; i < num_cells; ++i) {
         int count = 0;
         struct Cell current_cell = cell_list[i];
-        while (current_cell.particle_ids[count] != -1) {
-            fprintf(file, "%d,%d,%f,%f,%f\n", i, current_cell.particle_ids[count],
-                                                 current_cell.x[count],
-                                                 current_cell.y[count],
-                                                 current_cell.z[count]);
+        while (count < MAX_PARTICLES_PER_CELL && current_cell.particle_ids[count] != -1) {
+            fprintf(file, "%d,%f,%f,%f\n", current_cell.particle_ids[count],
+                                           current_cell.x[count],
+                                           current_cell.y[count],
+                                           current_cell.z[count]);
             count++;
         }
     }
+    fprintf(file, "\n");
 
     fclose(file);
 }

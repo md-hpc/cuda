@@ -5,6 +5,14 @@ extern "C" {
 #include <stdlib.h>
 #include <curand.h>
 
+#if defined(SIMULATE) && defined(TIME_RUN)
+#error Cannot compile with both SIMULATE and TIME_RUN flags
+#endif
+
+#if !defined(SIMULATE) && !defined(TIME_RUN)
+#error Cannot compile without neither SIMULATE nor TIME_RUN flags
+#endif
+
 //#define EPSILON (1.65e-9)                       // ng * m^2 / s^2
 #define EPSILON (1.65e11)                       // ng * A^2 / s^2 originally (1.65e-9)
 #define ARGON_MASS (39.948 * 1.66054e-15)       // ng
@@ -134,10 +142,10 @@ __global__ void force_eval(const struct Cell *cell_list, float *accelerations)
         reference_az += acceleration * diff_z;
     }
 
-    int accelerations_block_idx = ((blockIdx.x * 27 + blockIdx.y) * MAX_PARTICLES_PER_CELL + threadIdx.x) * 3;
-    accelerations[accelerations_block_idx] = reference_ax;
-    accelerations[accelerations_block_idx + 1] = reference_ay;
-    accelerations[accelerations_block_idx + 2] = reference_az;
+    int accelerations_block_idx = (blockIdx.x * 27 + blockIdx.y) * MAX_PARTICLES_PER_CELL * 3;
+    accelerations[accelerations_block_idx + threadIdx.x] = reference_ax;
+    accelerations[accelerations_block_idx + threadIdx.x + MAX_PARTICLES_PER_CELL] = reference_ay;
+    accelerations[accelerations_block_idx + threadIdx.x + (MAX_PARTICLES_PER_CELL * 2)] = reference_az;
 
     return;
 }
@@ -159,10 +167,13 @@ __global__ void particle_update(struct Cell *cell_list, float *accelerations)
     float az = 0;
 
     for (int i = 0; i < 27; ++i) {
-        int accelerations_block_idx = ((blockIdx.x * 27 + i) * MAX_PARTICLES_PER_CELL + threadIdx.x) * 3;
-        ax += accelerations[accelerations_block_idx];
-        ay += accelerations[accelerations_block_idx + 1];
-        az += accelerations[accelerations_block_idx + 2];
+        int accelerations_block_idx = (blockIdx.x * 27 + i) * MAX_PARTICLES_PER_CELL * 3;
+        ax += accelerations[accelerations_block_idx + threadIdx.x];
+        accelerations[accelerations_block_idx + threadIdx.x] = 0;
+        ay += accelerations[accelerations_block_idx + threadIdx.x + MAX_PARTICLES_PER_CELL];
+        accelerations[accelerations_block_idx + threadIdx.x + MAX_PARTICLES_PER_CELL] = 0;
+        az += accelerations[accelerations_block_idx + threadIdx.x + (MAX_PARTICLES_PER_CELL * 2)];
+        accelerations[accelerations_block_idx + threadIdx.x + (MAX_PARTICLES_PER_CELL * 2)] = 0;
     }
 
     reference_vx += ax * TIMESTEP_DURATION_FS;
@@ -245,6 +256,9 @@ int main(int argc, char **argv)
 
     char *input_file = argv[1];
     char *output_file = argv[2];
+    FILE *out = fopen(output_file, "w");
+    fprintf(out, "particle_id,x,y,z\n");
+    fclose(out);
 
     int particle_count;
 
@@ -266,15 +280,11 @@ int main(int argc, char **argv)
 
     GPU_PERROR(cudaMalloc(&device_cell_list_2, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell)));
     GPU_PERROR(cudaMalloc(&accelerations, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * 27 * MAX_PARTICLES_PER_CELL * 3 * sizeof(float)));
+    GPU_PERROR(cudaMemset(accelerations, 0, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * 27 * MAX_PARTICLES_PER_CELL * 3 * sizeof(float)));
 
     dim3 numBlocksCalculate(CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z, 27);
     dim3 numBlocksUpdate(CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z);
     dim3 threadsPerBlock(MAX_PARTICLES_PER_CELL);
-
-#ifdef SIMULATE
-    FILE *out = fopen(output_file, "w");
-    fprintf(out, "cell_idx,particle_id,x,y,z\n");
-#endif
 
 #ifdef TIME_RUN
     cudaEvent_t time_start;
@@ -285,9 +295,7 @@ int main(int argc, char **argv)
     GPU_PERROR(cudaEventRecord(time_start));
 #endif
 
-    int t;
-    for (t = 0; t < TIMESTEPS; ++t) {
-        GPU_PERROR(cudaMemset(accelerations, 0, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * 27 * MAX_PARTICLES_PER_CELL * 3 * sizeof(float)));
+    for (int t = 0; t < TIMESTEPS; ++t) {
         if (t % 2 == 0) {
             force_eval<<<numBlocksCalculate, threadsPerBlock>>>(device_cell_list_1, accelerations);
             particle_update<<<numBlocksUpdate, threadsPerBlock>>>(device_cell_list_1, accelerations);
@@ -304,29 +312,14 @@ int main(int argc, char **argv)
 #endif
         }
 #ifdef SIMULATE
-        for (int z = 0; z < CELL_LENGTH_Z; ++z) {
-            for (int y = 0; y < CELL_LENGTH_Y; ++y) {
-                for (int x = 0; x < CELL_LENGTH_X; ++x) {
-                    int count = 0;
-                    struct Cell current_cell = host_cell_list[x + y * CELL_LENGTH_X + z * CELL_LENGTH_X * CELL_LENGTH_Y];
-                    while (count < MAX_PARTICLES_PER_CELL && current_cell.particle_ids[count] != -1) {
-                        fprintf(out, "%d,%d,%f,%f,%f\n", x + y * CELL_LENGTH_X + z * CELL_LENGTH_X * CELL_LENGTH_Y,
-                                                        current_cell.particle_ids[count],
-                                                        current_cell.x[count],
-                                                        current_cell.y[count],
-                                                        current_cell.z[count]);
-                        count++;
-                    }
-                }
-            }
-        }
-        fprintf(out, "\n");
+        cell_list_to_csv(host_cell_list, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z, output_file, "a");
 #endif
     }
 
 #ifdef TIME_RUN
+    GPU_PERROR(cudaEventRecord(time_stop));
 
-    if (t % 2 == 1) {
+    if (TIMESTEPS % 2 == 1) {
         GPU_PERROR(cudaMemcpy(host_cell_list, device_cell_list_2, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyDeviceToHost));
     } else {
         GPU_PERROR(cudaMemcpy(host_cell_list, device_cell_list_1, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z * sizeof(struct Cell), cudaMemcpyDeviceToHost));
@@ -337,27 +330,12 @@ int main(int argc, char **argv)
     GPU_PERROR(cudaEventElapsedTime(&elapsed_milliseconds, time_start, time_stop));
     printf("cell_list,%d,%f\n", particle_count, elapsed_milliseconds / 1000);
 
-    FILE *out = fopen(output_file, "w");
-    fprintf(out, "particle_id,x,y,z\n");
-
-    for (int z = 0; z < CELL_LENGTH_Z; ++z) {
-        for (int y = 0; y < CELL_LENGTH_Y; ++y) {
-            for (int x = 0; x < CELL_LENGTH_X; ++x) {
-                int count = 0;
-                struct Cell current_cell = host_cell_list[x + y * CELL_LENGTH_X + z * CELL_LENGTH_X * CELL_LENGTH_Y];
-                while (count < MAX_PARTICLES_PER_CELL && current_cell.particle_ids[count] != -1) {
-                    fprintf(out, "%d,%f,%f,%f\n", current_cell.particle_ids[count],
-                                                     current_cell.x[count],
-                                                     current_cell.y[count],
-                                                     current_cell.z[count]);
-                    count++;
-                }
-            }
-        }
-    }
+    cell_list_to_csv(host_cell_list, CELL_LENGTH_X * CELL_LENGTH_Y * CELL_LENGTH_Z, output_file, "a");
 #endif
 
     GPU_PERROR(cudaFree(device_cell_list_1));
     GPU_PERROR(cudaFree(device_cell_list_2));
     GPU_PERROR(cudaFree(accelerations));
+
+    return 0;
 }
