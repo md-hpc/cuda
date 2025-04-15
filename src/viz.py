@@ -59,7 +59,7 @@ def main(argc, argv):
     # Setting the axes properties
     ani = animation.FuncAnimation(fig, update, len(timesteps), fargs=(ax,), interval=10, repeat_delay=5000, blit=False)
     ani.save(argv[3], writer='imagemagick')
-    plt.show()
+    #plt.show()
 
 if __name__ == "__main__":
     main(len(sys.argv), sys.argv)
