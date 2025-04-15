@@ -2,7 +2,7 @@
 
 PROJ_DIR=$(git rev-parse --show-toplevel)
 
-TIMESTEPS=1
+TIMESTEPS=300
 TIMESTEP_DURATION=2.5e-13
 
 for implementation in nsquared nsquared_shared nsquared_n3l cell_list cell_list_n3l; do
