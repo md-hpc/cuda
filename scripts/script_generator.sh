@@ -6,10 +6,11 @@ SCRIPTS_DIR=${PROJ_DIR}/scripts
 TIMESTEPS=300
 TIMESTEP_DURATION=2.5e-13
 
-TYPE=SIMULATE
+TYPE=TIME_RUN
 
 rm -rf ${SCRIPTS_DIR}/nsquared*.sh
 rm -rf ${SCRIPTS_DIR}/cell_list*.sh
+rm -rf ${SCRIPTS_DIR}/batch_job.sh
 
 # nsquared implementations
 for implementation in nsquared nsquared_shared nsquared_n3l; do
@@ -90,3 +91,17 @@ EOF
 
 	done
 done
+
+cat > ${SCRIPTS_DIR}/batch_job.sh <<EOF
+#!/bin/bash
+
+for implementations in nsquared nsquared_shared nsquared_n3l cell_list cell_list_n3l; do
+	rm -rf ${PROJ_DIR}/output/\${implementations}/*
+
+	for particle_count in 1024 4096 16384 65536; do
+		qsub ${PROJ_DIR}/scripts/\${implementations}_ts_${TIMESTEPS}_tsd_${TIMESTEP_DURATION}_n_${particle_count}.sh
+	done
+done
+EOF
+
+chmod +x ${SCRIPTS_DIR}/batch_job.sh 
