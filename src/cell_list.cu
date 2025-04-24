@@ -255,7 +255,7 @@ int main(int argc, char **argv)
     }
 
     char *input_file = argv[1];
-    const char *output_file = argv[2];
+    char *output_file = argv[2];
     FILE *out = fopen(output_file, "w");
     fprintf(out, "particle_id,x,y,z\n");
     fclose(out);
