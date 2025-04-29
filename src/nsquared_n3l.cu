@@ -125,11 +125,11 @@ __global__ void position_update(float *src_x, float *src_y, float *src_z,
     float ay = 0;
     float az = 0;
 
-    const int accelerations_block_size = particle_count * sizeof(float) * 3;
+    const int accelerations_block_size = particle_count * 3;
     for (int i = 0; i < gridDim.x; ++i) {
-        ax += accelerations[reference_particle_idx + accelerations_block_size * i];
-        ay += accelerations[reference_particle_idx + accelerations_block_size * i + 1];
-        az += accelerations[reference_particle_idx + accelerations_block_size * i + 2];
+        ax += accelerations[reference_particle_idx * 3 + accelerations_block_size * i];
+        ay += accelerations[reference_particle_idx * 3 + accelerations_block_size * i + 1];
+        az += accelerations[reference_particle_idx * 3 + accelerations_block_size * i + 2];
     }
 
     // calculate velocity for reference particle
