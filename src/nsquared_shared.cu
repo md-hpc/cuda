@@ -15,7 +15,7 @@ extern "C" {
 #error Cannot compile without neither SIMULATE nor TIME_RUN flags
 #endif
 
-#define MAX_PARTICLES_PER_BLOCK 1024
+#define MAX_PARTICLES_PER_BLOCK 32
 #define EPSILON (1.65e11)                       // ng * A^2 / s^2 originally (1.65e-9)
 #define ARGON_MASS (39.948 * 1.66054e-15)       // ng
 #define SIGMA (3.4f)                            // Angstrom
@@ -43,7 +43,7 @@ __device__ float compute_acceleration(float r_angstrom) {
 
 __global__ void timestep(float *particle_id, float *src_x, float *src_y, float *src_z,
                          float *vx, float *vy, float *vz, float *dst_x, float *dst_y,
-                         float *dst_z, int particle_count)
+                         float *dst_z, int particle_count, int *calculations)
 {
     // initialize shared memory - shared between threads in each block
     __shared__ float shared_id[MAX_PARTICLES_PER_BLOCK];
@@ -74,9 +74,7 @@ __global__ void timestep(float *particle_id, float *src_x, float *src_y, float *
         shared_y[threadIdx.x] = src_y[i + threadIdx.x];
         shared_z[threadIdx.x] = src_z[i + threadIdx.x];
 
-#if MAX_PARTICLES_PER_BLOCK > 32
         __syncthreads();
-#endif
 
         for (int j = 0; j < MAX_PARTICLES_PER_BLOCK; ++j) {
             // dont calculate acceleration with itself
@@ -94,14 +92,17 @@ __global__ void timestep(float *particle_id, float *src_x, float *src_y, float *
             float norm = sqrtf((diff_x * diff_x) + (diff_y * diff_y) + (diff_z * diff_z));
 
             // compute scalar acceleration and apply to xyz directions 
-            float acceleration = compute_acceleration(norm);
-            ax += acceleration * (reference_x - neighbor_x) / norm;
-            ay += acceleration * (reference_y - neighbor_y) / norm;
-            az += acceleration * (reference_z - neighbor_z) / norm;
-        }
-#if MAX_PARTICLES_PER_BLOCK > 32
-        __syncthreads();
+            float acceleration = compute_acceleration(norm) / norm;
+            ax += acceleration * diff_x;
+            ay += acceleration * diff_y;
+            az += acceleration * diff_z;
+
+#ifdef COUNT
+            calculations[reference_particle_idx]++;
 #endif
+        }
+
+        __syncthreads();
     }
 
     // calculate velocity for reference particle
@@ -185,6 +186,11 @@ int main(int argc, char **argv)
     GPU_PERROR(cudaMemset(vy, 0, particle_count * sizeof(float)));
     GPU_PERROR(cudaMemset(vz, 0, particle_count * sizeof(float)));
 
+    int *device_calculations;
+    GPU_PERROR(cudaMalloc(&device_calculations, particle_count * sizeof(int)));
+    GPU_PERROR(cudaMemset(device_calculations, 0, particle_count * sizeof(int)));
+    int *host_calculations = (int *) calloc(particle_count, sizeof(int));
+
     // set parameters
     dim3 numBlocks((particle_count - 1) / MAX_PARTICLES_PER_BLOCK + 1);
     dim3 threadsPerBlock(MAX_PARTICLES_PER_BLOCK);
@@ -200,14 +206,14 @@ int main(int argc, char **argv)
 
     for (int t = 0; t < TIMESTEPS; ++t) {
         if (t % 2 == 0) {
-            timestep<<<numBlocks, threadsPerBlock>>>(device_particle_ids, device_x_1, device_y_1, device_z_1, vx, vy, vz, device_x_2, device_y_2, device_z_2, particle_count);
+            timestep<<<numBlocks, threadsPerBlock>>>(device_particle_ids, device_x_1, device_y_1, device_z_1, vx, vy, vz, device_x_2, device_y_2, device_z_2, particle_count, device_calculations);
 #ifdef SIMULATE
             GPU_PERROR(cudaMemcpy(host_x, device_x_2, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
             GPU_PERROR(cudaMemcpy(host_y, device_y_2, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
             GPU_PERROR(cudaMemcpy(host_z, device_z_2, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
 #endif
         } else {
-            timestep<<<numBlocks, threadsPerBlock>>>(device_particle_ids, device_x_2, device_y_2, device_z_2, vx, vy, vz, device_x_1, device_y_1, device_z_1, particle_count);
+            timestep<<<numBlocks, threadsPerBlock>>>(device_particle_ids, device_x_2, device_y_2, device_z_2, vx, vy, vz, device_x_1, device_y_1, device_z_1, particle_count, device_calculations);
 #ifdef SIMULATE
             GPU_PERROR(cudaMemcpy(host_x, device_x_1, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
             GPU_PERROR(cudaMemcpy(host_y, device_y_1, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
@@ -243,6 +249,15 @@ int main(int argc, char **argv)
     for (int i = 0; i < particle_count; ++i) {
         fprintf(out, "%d,%f,%f,%f\n", host_particle_ids[i], host_x[i], host_y[i], host_z[i]);
     }
+#endif
+
+#ifdef COUNT
+    GPU_PERROR(cudaMemcpy(host_calculations, device_calculations, particle_count * sizeof(int), cudaMemcpyDeviceToHost));
+    int total = 0;
+    for (int i = 0; i < particle_count; ++i) {
+        total += host_calculations[i];
+    }
+    printf("nsquared_shared,%d,%d\n", particle_count, total);
 #endif
 
     GPU_PERROR(cudaFree(device_particle_ids));

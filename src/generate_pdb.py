@@ -15,9 +15,9 @@ def generate_pdb(filename, num_particles, num_cells_x, num_cells_y, num_cells_z,
 
     with open(filename, "w") as f:
         while len(positions) < num_particles:
-            x = round(random.uniform(0, cell_length_x), 3)
-            y = round(random.uniform(0, cell_length_y), 3)
-            z = round(random.uniform(0, cell_length_z), 3)
+            x = round(random.uniform(0, cell_length_x - 0.001), 3)
+            y = round(random.uniform(0, cell_length_y - 0.001), 3)
+            z = round(random.uniform(0, cell_length_z - 0.001), 3)
             x_cell = int(x/cell_cutoff_radius)
             y_cell = int(y/cell_cutoff_radius)
             z_cell = int(z/cell_cutoff_radius)
@@ -28,7 +28,7 @@ def generate_pdb(filename, num_particles, num_cells_x, num_cells_y, num_cells_z,
                 if position not in positions:
                     positions.add(position)
                     cell_counts[cell_index] += 1
-                    atom_line = f"ATOM  {len(positions):5d}  X   XXX A   1    {x:8.3f}{y:8.3f}{z:8.3f}  1.00  0.00           X  \n"
+                    atom_line = f"ATOM{len(positions):7d}  X   XXX A   1    {x:8.3f}{y:8.3f}{z:8.3f}  1.00  0.00           X  \n"
                     f.write(atom_line)
         f.write("END\n")
     print(f"PDB file '{filename}' created with {num_particles} particles in a universe with {num_cells_x}x{num_cells_y}x{num_cells_z} cells with a cell size of {cell_cutoff_radius} Angstroms.")

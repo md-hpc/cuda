@@ -67,31 +67,35 @@ void create_cell_list(const int *particle_ids, const float *x, const float *y, c
         int x_cell = x[i] / cell_cutoff_radius;
         int y_cell = y[i] / cell_cutoff_radius;
         int z_cell = z[i] / cell_cutoff_radius;
-        if (x_cell >= 0 && x_cell < cell_dim_x && y_cell >= 0 && y_cell < cell_dim_y && z_cell >= 0 && z_cell < cell_dim_z) {
-            cell_idx = x_cell + y_cell * cell_dim_x + z_cell * cell_dim_x * cell_dim_y;
-            if (cell_idx >= 0 && cell_idx < cell_dim_x * cell_dim_y * cell_dim_z) {
-                int free_slot = free_idx[cell_idx];
-                if (free_slot < MAX_PARTICLES_PER_CELL) {
-                    cell_list[cell_idx].particle_ids[free_slot] = particle_ids[i];
 
-                    cell_list[cell_idx].x[free_slot] = x[i];
-                    cell_list[cell_idx].y[free_slot] = y[i];
-                    cell_list[cell_idx].z[free_slot] = z[i];
-
-                    cell_list[cell_idx].vx[free_slot] = 0;
-                    cell_list[cell_idx].vy[free_slot] = 0;
-                    cell_list[cell_idx].vz[free_slot] = 0;
-
-                    free_idx[cell_idx]++;
-                } else {
-                    printf("Warning: Cell %d is full, particle %d cannot be added\n", cell_idx, i);
-                }
-            } else {
-                printf("Error: Computed cell_idx %d is out of bounds\n", cell_idx);
-            }
-        } else {
+        if (x_cell < 0 || x_cell >= cell_dim_x || y_cell < 0 || y_cell >= cell_dim_y || z_cell < 0 || z_cell >= cell_dim_z) {
             printf("Error: Particle %d is out of bounds: (%.2f, %.2f, %.2f)\n", i, x[i], y[i], z[i]);
+            exit(-1);
         }
+
+        cell_idx = x_cell + y_cell * cell_dim_x + z_cell * cell_dim_x * cell_dim_y;
+        if (cell_idx < 0 || cell_idx >= cell_dim_x * cell_dim_y * cell_dim_z) {
+            printf("Error: Computed cell_idx %d is out of bounds\n", cell_idx);
+            exit(-1);
+        }
+
+        int free_slot = free_idx[cell_idx];
+        if (free_slot >= MAX_PARTICLES_PER_CELL) {
+            printf("Warning: Cell %d (%d, %d, %d) is full, particle %d (%f, %f, %f) cannot be added\n", cell_idx, x_cell, y_cell, z_cell, i, x[i], y[i], z[i]);
+            exit(-1);
+        }
+
+        cell_list[cell_idx].particle_ids[free_slot] = particle_ids[i];
+
+        cell_list[cell_idx].x[free_slot] = x[i];
+        cell_list[cell_idx].y[free_slot] = y[i];
+        cell_list[cell_idx].z[free_slot] = z[i];
+
+        cell_list[cell_idx].vx[free_slot] = 0;
+        cell_list[cell_idx].vy[free_slot] = 0;
+        cell_list[cell_idx].vz[free_slot] = 0;
+
+        free_idx[cell_idx]++;
     }
 
     for (int i = 0; i < cell_dim_x * cell_dim_y * cell_dim_z; ++i) {

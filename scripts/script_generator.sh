@@ -26,7 +26,7 @@ for implementation in nsquared nsquared_shared nsquared_n3l; do
 #$ -e ${PROJ_DIR}/output/${implementation}/ts_${TIMESTEPS}_tsd_${TIMESTEP_DURATION}_n_1024_output_error.txt
 	
 module load cuda/12.5
-
+export CUDA_CACHE_DISABLE=1
 nvcc -I./include -D TIMESTEPS=${TIMESTEPS} -D TIMESTEP_DURATION_FS=${TIMESTEP_DURATION} -D UNIVERSE_LENGTH=300 -D ${TYPE} ${PROJ_DIR}/src/pdb_importer.c ${PROJ_DIR}/src/${implementation}.cu -o ${PROJ_DIR}/build/${implementation}
 ${PROJ_DIR}/build/${implementation} ${PROJ_DIR}/input/random_particles-1024.pdb ${PROJ_DIR}/output/${implementation}/ts_${TIMESTEPS}_tsd_${TIMESTEP_DURATION}_n_1024_output.csv
 EOF
@@ -44,7 +44,7 @@ EOF
 #$ -e ${PROJ_DIR}/output/${implementation}/ts_${TIMESTEPS}_tsd_${TIMESTEP_DURATION}_n_${particle_count}_output_error.txt
 	
 module load cuda/12.5
-
+export CUDA_CACHE_DISABLE=1
 nvcc -I./include -D TIMESTEPS=${TIMESTEPS} -D TIMESTEP_DURATION_FS=${TIMESTEP_DURATION} -D UNIVERSE_LENGTH=1000 -D ${TYPE} ${PROJ_DIR}/src/pdb_importer.c ${PROJ_DIR}/src/${implementation}.cu -o ${PROJ_DIR}/build/${implementation}
 ${PROJ_DIR}/build/${implementation} ${PROJ_DIR}/input/random_particles-${particle_count}.pdb ${PROJ_DIR}/output/${implementation}/ts_${TIMESTEPS}_tsd_${TIMESTEP_DURATION}_n_${particle_count}_output.csv
 EOF
@@ -66,7 +66,7 @@ for implementation in cell_list cell_list_n3l; do
 #$ -e ${PROJ_DIR}/output/${implementation}/ts_${TIMESTEPS}_tsd_${TIMESTEP_DURATION}_n_1024_output_error.txt
 	
 module load cuda/12.5
-
+export CUDA_CACHE_DISABLE=1
 nvcc -I./include -D TIMESTEPS=${TIMESTEPS} -D TIMESTEP_DURATION_FS=${TIMESTEP_DURATION} -D CELL_CUTOFF_RADIUS_ANGST=30 -D CELL_LENGTH_X=10 -D CELL_LENGTH_Y=10 -D CELL_LENGTH_Z=10 -D ${TYPE} ${PROJ_DIR}/src/pdb_importer.c ${PROJ_DIR}/src/${implementation}.cu -o ${PROJ_DIR}/build/${implementation}
 ${PROJ_DIR}/build/${implementation} ${PROJ_DIR}/input/random_particles-1024.pdb ${PROJ_DIR}/output/${implementation}/ts_${TIMESTEPS}_tsd_${TIMESTEP_DURATION}_n_1024_output.csv
 EOF
@@ -84,7 +84,7 @@ EOF
 #$ -e ${PROJ_DIR}/output/${implementation}/ts_${TIMESTEPS}_tsd_${TIMESTEP_DURATION}_n_${particle_count}_output_error.txt
 	
 module load cuda/12.5
-
+export CUDA_CACHE_DISABLE=1
 nvcc -I./include -D TIMESTEPS=${TIMESTEPS} -D TIMESTEP_DURATION_FS=${TIMESTEP_DURATION} -D CELL_CUTOFF_RADIUS_ANGST=100 -D CELL_LENGTH_X=10 -D CELL_LENGTH_Y=10 -D CELL_LENGTH_Z=10 -D ${TYPE} ${PROJ_DIR}/src/pdb_importer.c ${PROJ_DIR}/src/${implementation}.cu -o ${PROJ_DIR}/build/${implementation}
 ${PROJ_DIR}/build/${implementation} ${PROJ_DIR}/input/random_particles-${particle_count}.pdb ${PROJ_DIR}/output/${implementation}/ts_${TIMESTEPS}_tsd_${TIMESTEP_DURATION}_n_${particle_count}_output.csv
 EOF

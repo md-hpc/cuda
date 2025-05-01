@@ -55,7 +55,7 @@ __device__ float compute_acceleration(float r_angstrom) {
 
 __global__ void timestep(float *particle_id, float *src_x, float *src_y, float *src_z,
                          float *vx, float *vy, float *vz, float *dst_x, float *dst_y,
-                         float *dst_z, int particle_count, float *device_pe)
+                         float *dst_z, int particle_count, float *device_pe, int *calculations)
 {
     // each thread gets a particle as a reference particle
     int reference_particle_idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -95,6 +95,9 @@ __global__ void timestep(float *particle_id, float *src_x, float *src_y, float *
         az += acceleration * diff_z;
 #ifdef VALIDATE
         device_pe[i] = compute_potential(norm);
+#endif
+#ifdef COUNT
+	calculations[reference_particle_idx]++;
 #endif
     }
 
@@ -187,6 +190,11 @@ int main(int argc, char **argv)
     GPU_PERROR(cudaMemset(vy, 0.0f, particle_count * sizeof(float)));
     GPU_PERROR(cudaMemset(vz, 0.0f, particle_count * sizeof(float)));
 
+    int *device_calculations;
+    GPU_PERROR(cudaMalloc(&device_calculations, particle_count * sizeof(int)));
+    GPU_PERROR(cudaMemset(device_calculations, 0, particle_count * sizeof(int)));
+    int *host_calculations = (int *) calloc(particle_count, sizeof(int));
+
     // set parameters
     dim3 numBlocks((particle_count - 1) / MAX_PARTICLES_PER_BLOCK + 1);
     dim3 threadsPerBlock(MAX_PARTICLES_PER_BLOCK);
@@ -211,7 +219,7 @@ int main(int argc, char **argv)
 
     for (int t = 0; t < TIMESTEPS; ++t) {
         if (t % 2 == 0) {
-            timestep<<<numBlocks, threadsPerBlock>>>(device_particle_ids, device_x_1, device_y_1, device_z_1, vx, vy, vz, device_x_2, device_y_2, device_z_2, particle_count, device_pe);
+            timestep<<<numBlocks, threadsPerBlock>>>(device_particle_ids, device_x_1, device_y_1, device_z_1, vx, vy, vz, device_x_2, device_y_2, device_z_2, particle_count, device_pe, device_calculations);
 #ifdef SIMULATE
             GPU_PERROR(cudaMemcpy(host_x, device_x_2, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
             GPU_PERROR(cudaMemcpy(host_y, device_y_2, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
@@ -224,7 +232,7 @@ int main(int argc, char **argv)
             GPU_PERROR(cudaMemcpy(host_vz, vz, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
 #endif
         } else {
-            timestep<<<numBlocks, threadsPerBlock>>>(device_particle_ids, device_x_2, device_y_2, device_z_2, vx, vy, vz, device_x_1, device_y_1, device_z_1, particle_count, device_pe);
+            timestep<<<numBlocks, threadsPerBlock>>>(device_particle_ids, device_x_2, device_y_2, device_z_2, vx, vy, vz, device_x_1, device_y_1, device_z_1, particle_count, device_pe, device_calculations);
 #ifdef SIMULATE
             GPU_PERROR(cudaMemcpy(host_x, device_x_1, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
             GPU_PERROR(cudaMemcpy(host_y, device_y_1, particle_count * sizeof(float), cudaMemcpyDeviceToHost));
@@ -282,6 +290,15 @@ int main(int argc, char **argv)
     for (int i = 0; i < particle_count; ++i) {
         fprintf(out, "%d,%f,%f,%f\n", host_particle_ids[i], host_x[i], host_y[i], host_z[i]);
     }
+#endif
+
+#ifdef COUNT
+    GPU_PERROR(cudaMemcpy(host_calculations, device_calculations, particle_count * sizeof(int), cudaMemcpyDeviceToHost));
+    int total = 0;
+    for (int i = 0; i < particle_count; ++i) {
+        total += host_calculations[i];
+    }
+    printf("nsquared,%d,%d\n", particle_count, total);
 #endif
 
     GPU_PERROR(cudaFree(device_particle_ids));

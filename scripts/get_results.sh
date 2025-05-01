@@ -2,10 +2,10 @@
 
 PROJ_DIR=$(git rev-parse --show-toplevel)
 
-TIMESTEPS=300
+TIMESTEPS=1
 TIMESTEP_DURATION=2.5e-13
 
-TYPE=SIMULATE
+TYPE=TIME_RUN
 
 if [ "${TYPE}" = "SIMULATE" ]; then
 echo "making GIFs";

@@ -4,3 +4,6 @@ output/nsquared
 output/nsquared_shared
 output/nsquared_n3l
 output/cell_list
+scripts/nsquared*
+scripts/cell_list*
+scripts/batch_job.sh
